@@ -19,9 +19,10 @@ describe('Alpha transparency', function () {
 
   it('Flatten to RGB orange', function (done) {
     sharp(fixtures.inputPngWithTransparency)
-      .flatten()
-      .background({r: 255, g: 102, b: 0})
       .resize(400, 300)
+      .flatten({
+        background: { r: 255, g: 102, b: 0 }
+      })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(400, info.width);
@@ -32,9 +33,8 @@ describe('Alpha transparency', function () {
 
   it('Flatten to CSS/hex orange', function (done) {
     sharp(fixtures.inputPngWithTransparency)
-      .flatten()
-      .background('#ff6600')
       .resize(400, 300)
+      .flatten({ background: '#ff6600' })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(400, info.width);
@@ -46,14 +46,15 @@ describe('Alpha transparency', function () {
   it('Flatten 16-bit PNG with transparency to orange', function (done) {
     const output = fixtures.path('output.flatten-rgb16-orange.jpg');
     sharp(fixtures.inputPngWithTransparency16bit)
-      .flatten()
-      .background({r: 255, g: 102, b: 0})
+      .flatten({
+        background: { r: 255, g: 102, b: 0 }
+      })
       .toFile(output, function (err, info) {
         if (err) throw err;
         assert.strictEqual(true, info.size > 0);
         assert.strictEqual(32, info.width);
         assert.strictEqual(32, info.height);
-        fixtures.assertMaxColourDistance(output, fixtures.expected('flatten-rgb16-orange.jpg'), 25);
+        fixtures.assertMaxColourDistance(output, fixtures.expected('flatten-rgb16-orange.jpg'), 10);
         done();
       });
   });
@@ -71,14 +72,25 @@ describe('Alpha transparency', function () {
 
   it('Ignored for JPEG', function (done) {
     sharp(fixtures.inputJpg)
-      .background('#ff0000')
-      .flatten()
+      .flatten({ background: '#ff0000' })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(3, info.channels);
         done();
       });
+  });
+
+  it('Flatten with options but without colour does not throw', () => {
+    assert.doesNotThrow(() => {
+      sharp().flatten({});
+    });
+  });
+
+  it('Flatten to invalid colour throws', () => {
+    assert.throws(() => {
+      sharp().flatten({ background: 1 });
+    });
   });
 
   it('Enlargement with non-nearest neighbor interpolation shouldn’t cause dark edges', function () {
@@ -115,10 +127,31 @@ describe('Alpha transparency', function () {
       fixtures.inputWebP
     ].map(function (input) {
       return sharp(input)
+        .resize(10)
         .removeAlpha()
         .toBuffer({ resolveWithObject: true })
         .then(function (result) {
           assert.strictEqual(3, result.info.channels);
+        });
+    }));
+  });
+
+  it('Ensures alpha from fixtures without transparency, ignores those with', function () {
+    return Promise.all([
+      fixtures.inputPngWithTransparency,
+      fixtures.inputPngWithTransparency16bit,
+      fixtures.inputWebPWithTransparency,
+      fixtures.inputJpg,
+      fixtures.inputPng,
+      fixtures.inputWebP
+    ].map(function (input) {
+      return sharp(input)
+        .resize(10)
+        .ensureAlpha()
+        .png()
+        .toBuffer({ resolveWithObject: true })
+        .then(function (result) {
+          assert.strictEqual(4, result.info.channels);
         });
     }));
   });

@@ -16,16 +16,24 @@ describe('Platform-detection', function () {
     delete process.env.npm_config_platform;
   });
 
-  it('Can override ARM version via npm_config_armv', function () {
+  it('Can override ARM version via --arm-version', function () {
     process.env.npm_config_arch = 'arm';
-    process.env.npm_config_armv = 'test';
+    process.env.npm_config_arm_version = 'test';
     assert.strictEqual('armvtest', platform().split('-')[1]);
-    delete process.env.npm_config_armv;
+    delete process.env.npm_config_arm_version;
+    delete process.env.npm_config_arch;
+  });
+
+  it('Can override ARM64 version via --arm-version', function () {
+    process.env.npm_config_arch = 'arm64';
+    process.env.npm_config_arm_version = 'test';
+    assert.strictEqual('arm64vtest', platform().split('-')[1]);
+    delete process.env.npm_config_arm_version;
     delete process.env.npm_config_arch;
   });
 
   it('Can detect ARM version via process.config', function () {
-    process.env.npm_config_arch = 'armhf';
+    process.env.npm_config_arch = 'arm';
     const armVersion = process.config.variables.arm_version;
     process.config.variables.arm_version = 'test';
     assert.strictEqual('armvtest', platform().split('-')[1]);
@@ -35,13 +43,16 @@ describe('Platform-detection', function () {
 
   it('Defaults to ARMv6 for 32-bit', function () {
     process.env.npm_config_arch = 'arm';
+    const armVersion = process.config.variables.arm_version;
+    delete process.config.variables.arm_version;
     assert.strictEqual('armv6', platform().split('-')[1]);
+    process.config.variables.arm_version = armVersion;
     delete process.env.npm_config_arch;
   });
 
   it('Defaults to ARMv8 for 64-bit', function () {
     process.env.npm_config_arch = 'arm64';
-    assert.strictEqual('armv8', platform().split('-')[1]);
+    assert.strictEqual('arm64v8', platform().split('-')[1]);
     delete process.env.npm_config_arch;
   });
 });

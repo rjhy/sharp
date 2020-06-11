@@ -1,7 +1,7 @@
 {
   "name": "sharp",
   "description": "High performance Node.js image processing, the fastest module to resize JPEG, PNG, WebP and TIFF images",
-  "version": "0.20.8",
+  "version": "0.25.3",
   "author": "Lovell Fuller <npm@lovell.info>",
   "homepage": "https://github.com/lovell/sharp",
   "contributors": [
@@ -54,17 +54,40 @@
     "Sylvain Dumont <sylvain.dumont35@gmail.com>",
     "Alun Davies <alun.owain.davies@googlemail.com>",
     "Aidan Hoolachan <ajhoolachan21@gmail.com>",
-    "Axel Eirola <axel.eirola@iki.fi>"
+    "Axel Eirola <axel.eirola@iki.fi>",
+    "Freezy <freezy@xbmc.org>",
+    "Daiz <taneli.vatanen@gmail.com>",
+    "Julian Aubourg <j@ubourg.net>",
+    "Keith Belovay <keith@picthrive.com>",
+    "Michael B. Klein <mbklein@gmail.com>",
+    "Jordan Prudhomme <jordan@raboland.fr>",
+    "Ilya Ovdin <iovdin@gmail.com>",
+    "Andargor <andargor@yahoo.com>",
+    "Paul Neave <paul.neave@gmail.com>",
+    "Brendan Kennedy <brenwken@gmail.com>",
+    "Brychan Bennett-Odlum <git@brychan.io>",
+    "Edward Silverton <e.silverton@gmail.com>",
+    "Roman Malieiev <aromaleev@gmail.com>"
   ],
   "scripts": {
-    "install": "(node install/libvips && node install/dll-copy && prebuild-install) || (node-gyp rebuild && node install/dll-copy)",
-    "clean": "rm -rf node_modules/ build/ vendor/ coverage/ test/fixtures/output.*",
-    "test": "semistandard && cc && nyc --reporter=lcov --branches=99 mocha --slow=5000 --timeout=60000 ./test/unit/*.js && prebuild-ci",
-    "coverage": "./test/coverage/report.sh",
+    "install": "(node install/libvips && node install/dll-copy && prebuild-install --runtime=napi) || (node-gyp rebuild && node install/dll-copy)",
+    "clean": "rm -rf node_modules/ build/ vendor/ .nyc_output/ coverage/ test/fixtures/output.*",
+    "test": "semistandard && cpplint && npm run test-unit && npm run test-licensing && prebuild-ci",
+    "test-unit": "nyc --reporter=lcov --branches=99 mocha --slow=5000 --timeout=60000 ./test/unit/*.js",
+    "test-licensing": "license-checker --production --summary --onlyAllow=\"Apache-2.0;BSD;ISC;MIT\"",
+    "test-coverage": "./test/coverage/report.sh",
     "test-leak": "./test/leak/leak.sh",
-    "docs": "for m in constructor input resize composite operation colour channel output utility; do documentation build --shallow --format=md --markdown-toc=false lib/$m.js >docs/api-$m.md; done"
+    "docs-build": "documentation lint lib && for m in constructor input resize composite operation colour channel output utility; do documentation build --shallow --format=md --markdown-toc=false lib/$m.js >docs/api-$m.md; done && node docs/search-index/build",
+    "docs-serve": "cd docs && npx serve",
+    "docs-publish": "cd docs && npx firebase-tools deploy --project pixelplumbing --only hosting:pixelplumbing-sharp"
   },
   "main": "lib/index.js",
+  "files": [
+    "binding.gyp",
+    "install/**",
+    "lib/**",
+    "src/**"
+  ],
   "repository": {
     "type": "git",
     "url": "git://github.com/lovell/sharp"
@@ -86,38 +109,46 @@
     "vips"
   ],
   "dependencies": {
-    "color": "^3.0.0",
+    "color": "^3.1.2",
     "detect-libc": "^1.0.3",
-    "nan": "^2.11.0",
-    "fs-copy-file-sync": "^1.1.1",
+    "node-addon-api": "^3.0.0",
     "npmlog": "^4.1.2",
-    "prebuild-install": "^4.0.0",
-    "semver": "^5.5.1",
-    "simple-get": "^2.8.1",
-    "tar": "^4.4.6",
+    "prebuild-install": "^5.3.4",
+    "semver": "^7.3.2",
+    "simple-get": "^4.0.0",
+    "tar": "^6.0.2",
     "tunnel-agent": "^0.6.0"
   },
   "devDependencies": {
-    "async": "^2.6.1",
-    "cc": "^1.0.2",
-    "decompress-zip": "^0.3.1",
-    "documentation": "^8.1.2",
-    "exif-reader": "^1.0.2",
+    "async": "^3.2.0",
+    "cc": "^2.0.1",
+    "decompress-zip": "^0.3.2",
+    "documentation": "^13.0.1",
+    "exif-reader": "^1.0.3",
     "icc": "^1.0.0",
-    "mocha": "^5.2.0",
-    "mock-fs": "^4.6.0",
-    "nyc": "^12.0.1",
-    "prebuild": "^7.6.2",
-    "prebuild-ci": "^2.2.3",
-    "rimraf": "^2.6.2",
-    "semistandard": "^12.0.1"
+    "license-checker": "^25.0.1",
+    "mocha": "^7.2.0",
+    "mock-fs": "^4.12.0",
+    "nyc": "^15.1.0",
+    "prebuild": "^10.0.0",
+    "prebuild-ci": "^3.1.0",
+    "rimraf": "^3.0.2",
+    "semistandard": "^14.2.0"
   },
   "license": "Apache-2.0",
   "config": {
-    "libvips": "8.6.1"
+    "libvips": "8.9.1"
   },
   "engines": {
-    "node": ">=4.5.0"
+    "node": ">=10"
+  },
+  "funding": {
+    "url": "https://opencollective.com/libvips"
+  },
+  "binary": {
+    "napi_versions": [
+      3
+    ]
   },
   "semistandard": {
     "env": [
@@ -127,10 +158,7 @@
   "cc": {
     "linelength": "120",
     "filter": [
-      "build/c++11",
-      "build/include",
-      "runtime/indentation_namespace",
-      "runtime/references"
+      "build/include"
     ]
   }
 }

@@ -69,8 +69,9 @@ describe('Partial image extraction', function () {
 
   it('After resize and crop', function (done) {
     sharp(fixtures.inputJpg)
-      .resize(500, 500)
-      .crop(sharp.gravity.north)
+      .resize(500, 500, {
+        position: sharp.gravity.north
+      })
       .extract({ left: 10, top: 10, width: 100, height: 100 })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
@@ -83,8 +84,9 @@ describe('Partial image extraction', function () {
   it('Before and after resize and crop', function (done) {
     sharp(fixtures.inputJpg)
       .extract({ left: 0, top: 0, width: 700, height: 700 })
-      .resize(500, 500)
-      .crop(sharp.gravity.north)
+      .resize(500, 500, {
+        position: sharp.gravity.north
+      })
       .extract({ left: 10, top: 10, width: 100, height: 100 })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
@@ -115,7 +117,33 @@ describe('Partial image extraction', function () {
         if (err) throw err;
         assert.strictEqual(280, info.width);
         assert.strictEqual(380, info.height);
-        fixtures.assertSimilar(fixtures.expected('rotate-extract.jpg'), data, { threshold: 6 }, done);
+        fixtures.assertSimilar(fixtures.expected('rotate-extract.jpg'), data, { threshold: 7 }, done);
+      });
+  });
+
+  it('Extract then rotate non-90 anagle', function (done) {
+    sharp(fixtures.inputPngWithGreyAlpha)
+      .extract({ left: 20, top: 10, width: 380, height: 280 })
+      .rotate(45)
+      .jpeg()
+      .toBuffer(function (err, data, info) {
+        if (err) throw err;
+        assert.strictEqual(467, info.width);
+        assert.strictEqual(467, info.height);
+        fixtures.assertSimilar(fixtures.expected('extract-rotate-45.jpg'), data, done);
+      });
+  });
+
+  it('Rotate then extract non-90 angle', function (done) {
+    sharp(fixtures.inputPngWithGreyAlpha)
+      .rotate(45)
+      .extract({ left: 20, top: 10, width: 380, height: 280 })
+      .jpeg()
+      .toBuffer(function (err, data, info) {
+        if (err) throw err;
+        assert.strictEqual(380, info.width);
+        assert.strictEqual(280, info.height);
+        fixtures.assertSimilar(fixtures.expected('rotate-extract-45.jpg'), data, { threshold: 7 }, done);
       });
   });
 

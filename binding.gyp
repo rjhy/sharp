@@ -11,6 +11,7 @@
         ],
         'sources': [
           'src/libvips/cplusplus/VError.cpp',
+          'src/libvips/cplusplus/VConnection.cpp',
           'src/libvips/cplusplus/VInterpolate.cpp',
           'src/libvips/cplusplus/VImage.cpp'
         ],
@@ -28,7 +29,22 @@
           'Release': {
             'msvs_settings': {
               'VCCLCompilerTool': {
-                'ExceptionHandling': 1
+                'ExceptionHandling': 1,
+                'WholeProgramOptimization': 'true'
+              },
+              'VCLibrarianTool': {
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL'
+                ]
+              },
+              'VCLinkerTool': {
+                'ImageHasSafeExceptionHandlers': 'false',
+                'OptimizeReferences': 2,
+                'EnableCOMDATFolding': 2,
+                'LinkIncremental': 1,
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL'
+                ]
               }
             },
             'msvs_disabled_warnings': [
@@ -43,7 +59,11 @@
     ]
   }, {
     'target_name': 'sharp',
+    'defines': [
+      'NAPI_VERSION=3'
+    ],
     'dependencies': [
+      '<!(node -p "require(\'node-addon-api\').gyp")',
       'libvips-cpp'
     ],
     'variables': {
@@ -64,11 +84,11 @@
       'src/stats.cc',
       'src/operations.cc',
       'src/pipeline.cc',
-      'src/sharp.cc',
-      'src/utilities.cc'
+      'src/utilities.cc',
+      'src/sharp.cc'
     ],
     'include_dirs': [
-      '<!(node -e "require(\'nan\')")'
+      '<!@(node -p "require(\'node-addon-api\').include")',
     ],
     'conditions': [
       ['use_global_libvips == "true"', {
@@ -97,7 +117,8 @@
         'conditions': [
           ['OS == "win"', {
             'defines': [
-              '_ALLOW_KEYWORD_MACROS'
+              '_ALLOW_KEYWORD_MACROS',
+              '_FILE_OFFSET_BITS=64'
             ],
             'libraries': [
               '../vendor/lib/libvips.lib',
@@ -112,7 +133,7 @@
               '../vendor/lib/libglib-2.0.0.dylib',
               '../vendor/lib/libgobject-2.0.0.dylib',
               # Ensure runtime linking is relative to sharp.node
-              '-rpath \'@loader_path/../../vendor/lib\''
+              '-Wl,-s -rpath \'@loader_path/../../vendor/lib\''
             ]
           }],
           ['OS == "linux"', {
@@ -126,11 +147,12 @@
               '../vendor/lib/libgobject-2.0.so',
               # Dependencies of dependencies, included for openSUSE support
               '../vendor/lib/libcairo.so',
-              '../vendor/lib/libcroco-0.6.so',
               '../vendor/lib/libexif.so',
+              '../vendor/lib/libexpat.so',
               '../vendor/lib/libffi.so',
               '../vendor/lib/libfontconfig.so',
               '../vendor/lib/libfreetype.so',
+              '../vendor/lib/libfribidi.so',
               '../vendor/lib/libgdk_pixbuf-2.0.so',
               '../vendor/lib/libgif.so',
               '../vendor/lib/libgio-2.0.so',
@@ -149,10 +171,12 @@
               '../vendor/lib/librsvg-2.so',
               '../vendor/lib/libtiff.so',
               '../vendor/lib/libwebp.so',
+              '../vendor/lib/libwebpdemux.so',
+              '../vendor/lib/libwebpmux.so',
               '../vendor/lib/libxml2.so',
               '../vendor/lib/libz.so',
               # Ensure runtime linking is relative to sharp.node
-              '-Wl,--disable-new-dtags -Wl,-rpath=\'$${ORIGIN}/../../vendor/lib\''
+              '-Wl,-s -Wl,--disable-new-dtags -Wl,-rpath=\'$${ORIGIN}/../../vendor/lib\''
             ]
           }]
         ]
@@ -178,13 +202,42 @@
     },
     'configurations': {
       'Release': {
-        'msvs_settings': {
-          'VCCLCompilerTool': {
-            'ExceptionHandling': 1
-          }
-        },
-        'msvs_disabled_warnings': [
-          4275
+        'conditions': [
+          ['OS == "linux"', {
+            'cflags_cc': [
+              '-Wno-cast-function-type'
+            ]
+          }],
+          ['target_arch == "arm"', {
+            'cflags_cc': [
+              '-Wno-psabi'
+            ]
+          }],
+          ['OS == "win"', {
+            'msvs_settings': {
+              'VCCLCompilerTool': {
+                'ExceptionHandling': 1,
+                'WholeProgramOptimization': 'true'
+              },
+              'VCLibrarianTool': {
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL'
+                ]
+              },
+              'VCLinkerTool': {
+                'ImageHasSafeExceptionHandlers': 'false',
+                'OptimizeReferences': 2,
+                'EnableCOMDATFolding': 2,
+                'LinkIncremental': 1,
+                'AdditionalOptions': [
+                  '/LTCG:INCREMENTAL'
+                ]
+              }
+            },
+            'msvs_disabled_warnings': [
+              4275
+            ]
+          }]
         ]
       }
     },

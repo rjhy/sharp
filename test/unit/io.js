@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const assert = require('assert');
+const rimraf = require('rimraf');
 
 const sharp = require('../../');
 const fixtures = require('../fixtures');
@@ -16,7 +17,7 @@ describe('Input/output', function () {
 
   it('Read from File and write to Stream', function (done) {
     const writable = fs.createWriteStream(fixtures.outputJpg);
-    writable.on('finish', function () {
+    writable.on('close', function () {
       sharp(fixtures.outputJpg).toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(true, data.length > 0);
@@ -24,8 +25,7 @@ describe('Input/output', function () {
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
-        fs.unlinkSync(fixtures.outputJpg);
-        done();
+        rimraf(fixtures.outputJpg, done);
       });
     });
     sharp(fixtures.inputJpg).resize(320, 240).pipe(writable);
@@ -34,7 +34,7 @@ describe('Input/output', function () {
   it('Read from Buffer and write to Stream', function (done) {
     const inputJpgBuffer = fs.readFileSync(fixtures.inputJpg);
     const writable = fs.createWriteStream(fixtures.outputJpg);
-    writable.on('finish', function () {
+    writable.on('close', function () {
       sharp(fixtures.outputJpg).toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(true, data.length > 0);
@@ -42,8 +42,7 @@ describe('Input/output', function () {
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
-        fs.unlinkSync(fixtures.outputJpg);
-        done();
+        rimraf(fixtures.outputJpg, done);
       });
     });
     sharp(inputJpgBuffer).resize(320, 240).pipe(writable);
@@ -57,8 +56,7 @@ describe('Input/output', function () {
       assert.strictEqual('jpeg', info.format);
       assert.strictEqual(320, info.width);
       assert.strictEqual(240, info.height);
-      fs.unlinkSync(fixtures.outputJpg);
-      done();
+      rimraf(fixtures.outputJpg, done);
     });
     readable.pipe(pipeline);
   });
@@ -81,7 +79,7 @@ describe('Input/output', function () {
     const pipeline = sharp().resize(1, 1);
     fs.createReadStream(fixtures.inputJpg).pipe(pipeline);
     return pipeline
-      .toBuffer({resolveWithObject: false})
+      .toBuffer({ resolveWithObject: false })
       .then(function (data) {
         assert.strictEqual(true, data instanceof Buffer);
         assert.strictEqual(true, data.length > 0);
@@ -92,7 +90,7 @@ describe('Input/output', function () {
     const pipeline = sharp().resize(1, 1);
     fs.createReadStream(fixtures.inputJpg).pipe(pipeline);
     return pipeline
-      .toBuffer({resolveWithObject: true})
+      .toBuffer({ resolveWithObject: true })
       .then(function (object) {
         assert.strictEqual('object', typeof object);
         assert.strictEqual('object', typeof object.info);
@@ -108,7 +106,7 @@ describe('Input/output', function () {
   it('Read from File and write to Buffer via Promise resolved with Buffer', function () {
     return sharp(fixtures.inputJpg)
       .resize(1, 1)
-      .toBuffer({resolveWithObject: false})
+      .toBuffer({ resolveWithObject: false })
       .then(function (data) {
         assert.strictEqual(true, data instanceof Buffer);
         assert.strictEqual(true, data.length > 0);
@@ -118,7 +116,7 @@ describe('Input/output', function () {
   it('Read from File and write to Buffer via Promise resolved with Object', function () {
     return sharp(fixtures.inputJpg)
       .resize(1, 1)
-      .toBuffer({resolveWithObject: true})
+      .toBuffer({ resolveWithObject: true })
       .then(function (object) {
         assert.strictEqual('object', typeof object);
         assert.strictEqual('object', typeof object.info);
@@ -134,7 +132,7 @@ describe('Input/output', function () {
   it('Read from Stream and write to Stream', function (done) {
     const readable = fs.createReadStream(fixtures.inputJpg);
     const writable = fs.createWriteStream(fixtures.outputJpg);
-    writable.on('finish', function () {
+    writable.on('close', function () {
       sharp(fixtures.outputJpg).toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(true, data.length > 0);
@@ -142,8 +140,7 @@ describe('Input/output', function () {
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
-        fs.unlinkSync(fixtures.outputJpg);
-        done();
+        rimraf(fixtures.outputJpg, done);
       });
     });
     const pipeline = sharp().resize(320, 240);
@@ -162,10 +159,9 @@ describe('Input/output', function () {
       assert.strictEqual(3, info.channels);
       infoEventEmitted = true;
     });
-    writable.on('finish', function () {
+    writable.on('close', function () {
       assert.strictEqual(true, infoEventEmitted);
-      fs.unlinkSync(fixtures.outputJpg);
-      done();
+      rimraf(fixtures.outputJpg, done);
     });
     readable.pipe(pipeline).pipe(writable);
   });
@@ -177,8 +173,7 @@ describe('Input/output', function () {
       anErrorWasEmitted = !!err;
     }).on('end', function () {
       assert(anErrorWasEmitted);
-      fs.unlinkSync(fixtures.outputJpg);
-      done();
+      rimraf(fixtures.outputJpg, done);
     });
     const readableButNotAnImage = fs.createReadStream(__filename);
     const writable = fs.createWriteStream(fixtures.outputJpg);
@@ -192,8 +187,7 @@ describe('Input/output', function () {
       anErrorWasEmitted = !!err;
     }).on('end', function () {
       assert(anErrorWasEmitted);
-      fs.unlinkSync(fixtures.outputJpg);
-      done();
+      rimraf(fixtures.outputJpg, done);
     });
     const writable = fs.createWriteStream(fixtures.outputJpg);
     readableButNotAnImage.pipe(writable);
@@ -202,7 +196,7 @@ describe('Input/output', function () {
   it('Readable side of Stream can start flowing after Writable side has finished', function (done) {
     const readable = fs.createReadStream(fixtures.inputJpg);
     const writable = fs.createWriteStream(fixtures.outputJpg);
-    writable.on('finish', function () {
+    writable.on('close', function () {
       sharp(fixtures.outputJpg).toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(true, data.length > 0);
@@ -210,8 +204,7 @@ describe('Input/output', function () {
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
-        fs.unlinkSync(fixtures.outputJpg);
-        done();
+        rimraf(fixtures.outputJpg, done);
       });
     });
     const pipeline = sharp().resize(320, 240);
@@ -221,37 +214,39 @@ describe('Input/output', function () {
     });
   });
 
-  it('Sequential read, force JPEG', function (done) {
-    sharp(fixtures.inputJpg)
-      .sequentialRead()
-      .resize(320, 240)
-      .toFormat(sharp.format.jpeg)
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
-        assert.strictEqual(data.length, info.size);
-        assert.strictEqual('jpeg', info.format);
-        assert.strictEqual(320, info.width);
-        assert.strictEqual(240, info.height);
-        done();
-      });
+  it('Invalid sequential read option throws', () => {
+    assert.throws(() => {
+      sharp({ sequentialRead: 'fail' });
+    }, /Expected boolean for sequentialRead but received fail of type string/);
   });
 
-  it('Not sequential read, force JPEG', function (done) {
-    sharp(fixtures.inputJpg)
-      .sequentialRead(false)
+  it('Sequential read, force JPEG', () =>
+    sharp(fixtures.inputJpg, { sequentialRead: true })
+      .resize(320, 240)
+      .toFormat(sharp.format.jpeg)
+      .toBuffer({ resolveWithObject: true })
+      .then(({ data, info }) => {
+        assert.strictEqual(data.length > 0, true);
+        assert.strictEqual(data.length, info.size);
+        assert.strictEqual(info.format, 'jpeg');
+        assert.strictEqual(info.width, 320);
+        assert.strictEqual(info.height, 240);
+      })
+  );
+
+  it('Not sequential read, force JPEG', () =>
+    sharp(fixtures.inputJpg, { sequentialRead: false })
       .resize(320, 240)
       .toFormat('jpeg')
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
+      .toBuffer({ resolveWithObject: true })
+      .then(({ data, info }) => {
+        assert.strictEqual(data.length > 0, true);
         assert.strictEqual(data.length, info.size);
-        assert.strictEqual('jpeg', info.format);
-        assert.strictEqual(320, info.width);
-        assert.strictEqual(240, info.height);
-        done();
-      });
-  });
+        assert.strictEqual(info.format, 'jpeg');
+        assert.strictEqual(info.width, 320);
+        assert.strictEqual(info.height, 240);
+      })
+  );
 
   it('Support output to jpg format', function (done) {
     sharp(fixtures.inputPng)
@@ -270,7 +265,8 @@ describe('Input/output', function () {
 
   it('Fail when output File is input File', function (done) {
     sharp(fixtures.inputJpg).toFile(fixtures.inputJpg, function (err) {
-      assert(!!err);
+      assert(err instanceof Error);
+      assert.strictEqual('Cannot use same file for input and output', err.message);
       done();
     });
   });
@@ -280,14 +276,16 @@ describe('Input/output', function () {
       assert(false);
       done();
     }).catch(function (err) {
-      assert(!!err);
+      assert(err instanceof Error);
+      assert.strictEqual('Cannot use same file for input and output', err.message);
       done();
     });
   });
 
   it('Fail when output File is empty', function (done) {
     sharp(fixtures.inputJpg).toFile('', function (err) {
-      assert(!!err);
+      assert(err instanceof Error);
+      assert.strictEqual('Missing output file path', err.message);
       done();
     });
   });
@@ -297,17 +295,20 @@ describe('Input/output', function () {
       assert(false);
       done();
     }).catch(function (err) {
-      assert(!!err);
+      assert(err instanceof Error);
+      assert.strictEqual('Missing output file path', err.message);
       done();
     });
   });
 
   it('Fail when input is empty Buffer', function (done) {
+    if (sharp.format.magick.input.buffer) return this.skip(); // can be removed with libvips 8.10.0+
     sharp(Buffer.alloc(0)).toBuffer().then(function () {
       assert(false);
       done();
     }).catch(function (err) {
       assert(err instanceof Error);
+      assert.strictEqual('Input buffer contains unsupported image format', err.message);
       done();
     });
   });
@@ -318,6 +319,18 @@ describe('Input/output', function () {
       done();
     }).catch(function (err) {
       assert(err instanceof Error);
+      assert.strictEqual('Input buffer contains unsupported image format', err.message);
+      done();
+    });
+  });
+
+  it('Fail when input file path is missing', function (done) {
+    sharp('does-not-exist').toBuffer().then(function () {
+      assert(false);
+      done();
+    }).catch(function (err) {
+      assert(err instanceof Error);
+      assert.strictEqual('Input file is missing', err.message);
       done();
     });
   });
@@ -356,162 +369,6 @@ describe('Input/output', function () {
       .toBuffer();
   });
 
-  it('JPEG quality', function (done) {
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ quality: 70 })
-      .toBuffer(function (err, buffer70) {
-        if (err) throw err;
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .toBuffer(function (err, buffer80) {
-            if (err) throw err;
-            sharp(fixtures.inputJpg)
-              .resize(320, 240)
-              .jpeg({ quality: 90 })
-              .toBuffer(function (err, buffer90) {
-                if (err) throw err;
-                assert(buffer70.length < buffer80.length);
-                assert(buffer80.length < buffer90.length);
-                done();
-              });
-          });
-      });
-  });
-
-  describe('Invalid JPEG quality', function () {
-    [-1, 88.2, 'test'].forEach(function (quality) {
-      it(quality.toString(), function () {
-        assert.throws(function () {
-          sharp().jpeg({ quality: quality });
-        });
-      });
-    });
-  });
-
-  describe('Invalid JPEG quantisation table', function () {
-    [-1, 88.2, 'test'].forEach(function (table) {
-      it(table.toString(), function () {
-        assert.throws(function () {
-          sharp().jpeg({ quantisationTable: table });
-        });
-      });
-    });
-  });
-
-  it('Progressive JPEG image', function (done) {
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ progressive: false })
-      .toBuffer(function (err, nonProgressiveData, nonProgressiveInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, nonProgressiveData.length > 0);
-        assert.strictEqual(nonProgressiveData.length, nonProgressiveInfo.size);
-        assert.strictEqual('jpeg', nonProgressiveInfo.format);
-        assert.strictEqual(320, nonProgressiveInfo.width);
-        assert.strictEqual(240, nonProgressiveInfo.height);
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ progressive: true })
-          .toBuffer(function (err, progressiveData, progressiveInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, progressiveData.length > 0);
-            assert.strictEqual(progressiveData.length, progressiveInfo.size);
-            assert.strictEqual(false, progressiveData.length === nonProgressiveData.length);
-            assert.strictEqual('jpeg', progressiveInfo.format);
-            assert.strictEqual(320, progressiveInfo.width);
-            assert.strictEqual(240, progressiveInfo.height);
-            done();
-          });
-      });
-  });
-
-  it('Progressive PNG image', function (done) {
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .png({ progressive: false })
-      .toBuffer(function (err, nonProgressiveData, nonProgressiveInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, nonProgressiveData.length > 0);
-        assert.strictEqual(nonProgressiveData.length, nonProgressiveInfo.size);
-        assert.strictEqual('png', nonProgressiveInfo.format);
-        assert.strictEqual(320, nonProgressiveInfo.width);
-        assert.strictEqual(240, nonProgressiveInfo.height);
-        sharp(nonProgressiveData)
-          .png({ progressive: true })
-          .toBuffer(function (err, progressiveData, progressiveInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, progressiveData.length > 0);
-            assert.strictEqual(progressiveData.length, progressiveInfo.size);
-            assert.strictEqual(true, progressiveData.length > nonProgressiveData.length);
-            assert.strictEqual('png', progressiveInfo.format);
-            assert.strictEqual(320, progressiveInfo.width);
-            assert.strictEqual(240, progressiveInfo.height);
-            done();
-          });
-      });
-  });
-
-  if (sharp.format.webp.output.buffer) {
-    it('WebP output', function (done) {
-      sharp(fixtures.inputJpg)
-        .resize(320, 240)
-        .toFormat(sharp.format.webp)
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(true, data.length > 0);
-          assert.strictEqual('webp', info.format);
-          assert.strictEqual(320, info.width);
-          assert.strictEqual(240, info.height);
-          done();
-        });
-    });
-
-    it('should work for webp alpha quality', function (done) {
-      sharp(fixtures.inputPngAlphaPremultiplicationSmall)
-        .webp({alphaQuality: 80})
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(true, data.length > 0);
-          assert.strictEqual('webp', info.format);
-          fixtures.assertSimilar(fixtures.expected('webp-alpha-80.webp'), data, done);
-        });
-    });
-
-    it('should work for webp lossless', function (done) {
-      sharp(fixtures.inputPngAlphaPremultiplicationSmall)
-        .webp({lossless: true})
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(true, data.length > 0);
-          assert.strictEqual('webp', info.format);
-          fixtures.assertSimilar(fixtures.expected('webp-lossless.webp'), data, done);
-        });
-    });
-
-    it('should work for webp near-lossless', function (done) {
-      sharp(fixtures.inputPngAlphaPremultiplicationSmall)
-        .webp({nearLossless: true, quality: 50})
-        .toBuffer(function (err50, data50, info50) {
-          if (err50) throw err50;
-          assert.strictEqual(true, data50.length > 0);
-          assert.strictEqual('webp', info50.format);
-          fixtures.assertSimilar(fixtures.expected('webp-near-lossless-50.webp'), data50, done);
-        });
-    });
-
-    it('should use near-lossless when both lossless and nearLossless are specified', function (done) {
-      sharp(fixtures.inputPngAlphaPremultiplicationSmall)
-        .webp({nearLossless: true, quality: 50, lossless: true})
-        .toBuffer(function (err50, data50, info50) {
-          if (err50) throw err50;
-          assert.strictEqual(true, data50.length > 0);
-          assert.strictEqual('webp', info50.format);
-          fixtures.assertSimilar(fixtures.expected('webp-near-lossless-50.webp'), data50, done);
-        });
-    });
-  }
-
   it('Invalid output format', function (done) {
     let isValid = false;
     try {
@@ -538,20 +395,20 @@ describe('Input/output', function () {
       });
   });
 
-  it('TIFF file input with invalid page fails gracefully', function (done) {
-    sharp(fixtures.inputTiffMultipage, { page: 2 })
-      .toBuffer(function (err) {
+  it('Stream input with corrupt header fails gracefully', function (done) {
+    const transformer = sharp();
+    transformer
+      .toBuffer()
+      .then(function () {
+        done(new Error('Unexpectedly resolved Promise'));
+      })
+      .catch(function (err) {
         assert.strictEqual(true, !!err);
         done();
       });
-  });
-
-  it('TIFF buffer input with invalid page fails gracefully', function (done) {
-    sharp(fs.readFileSync(fixtures.inputTiffMultipage), { page: 2 })
-      .toBuffer(function (err) {
-        assert.strictEqual(true, !!err);
-        done();
-      });
+    fs
+      .createReadStream(fixtures.inputJpgWithCorruptHeader)
+      .pipe(transformer);
   });
 
   describe('Output filename with unknown extension', function () {
@@ -564,8 +421,7 @@ describe('Input/output', function () {
           assert.strictEqual('jpeg', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
     });
 
@@ -578,8 +434,7 @@ describe('Input/output', function () {
           assert.strictEqual('png', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
     });
 
@@ -592,8 +447,7 @@ describe('Input/output', function () {
           assert.strictEqual('webp', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
     });
 
@@ -606,8 +460,7 @@ describe('Input/output', function () {
           assert.strictEqual('tiff', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
     });
 
@@ -620,8 +473,7 @@ describe('Input/output', function () {
           assert.strictEqual('png', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
     });
 
@@ -635,666 +487,8 @@ describe('Input/output', function () {
           assert.strictEqual('jpeg', info.format);
           assert.strictEqual(320, info.width);
           assert.strictEqual(80, info.height);
-          fs.unlinkSync(fixtures.outputZoinks);
-          done();
+          rimraf(fixtures.outputZoinks, done);
         });
-    });
-  });
-
-  describe('PNG output', function () {
-    it('compression level is valid', function () {
-      assert.doesNotThrow(function () {
-        sharp().png({ compressionLevel: 0 });
-      });
-    });
-
-    it('compression level is invalid', function () {
-      assert.throws(function () {
-        sharp().png({ compressionLevel: -1 });
-      });
-    });
-
-    it('default compressionLevel generates smaller file than compressionLevel=6', function (done) {
-      // First generate with default compressionLevel
-      sharp(fixtures.inputPng)
-        .resize(320, 240)
-        .png()
-        .toBuffer(function (err, defaultData, defaultInfo) {
-          if (err) throw err;
-          assert.strictEqual(true, defaultData.length > 0);
-          assert.strictEqual('png', defaultInfo.format);
-          // Then generate with compressionLevel=6
-          sharp(fixtures.inputPng)
-            .resize(320, 240)
-            .png({ compressionLevel: 6 })
-            .toBuffer(function (err, largerData, largerInfo) {
-              if (err) throw err;
-              assert.strictEqual(true, largerData.length > 0);
-              assert.strictEqual('png', largerInfo.format);
-              assert.strictEqual(true, defaultData.length < largerData.length);
-              done();
-            });
-        });
-    });
-
-    it('without adaptiveFiltering generates smaller file', function (done) {
-      // First generate with adaptive filtering
-      sharp(fixtures.inputPng)
-        .resize(320, 240)
-        .png({ adaptiveFiltering: true })
-        .toBuffer(function (err, adaptiveData, adaptiveInfo) {
-          if (err) throw err;
-          assert.strictEqual(true, adaptiveData.length > 0);
-          assert.strictEqual(adaptiveData.length, adaptiveInfo.size);
-          assert.strictEqual('png', adaptiveInfo.format);
-          assert.strictEqual(320, adaptiveInfo.width);
-          assert.strictEqual(240, adaptiveInfo.height);
-          // Then generate without
-          sharp(fixtures.inputPng)
-            .resize(320, 240)
-            .png({ adaptiveFiltering: false })
-            .toBuffer(function (err, withoutAdaptiveData, withoutAdaptiveInfo) {
-              if (err) throw err;
-              assert.strictEqual(true, withoutAdaptiveData.length > 0);
-              assert.strictEqual(withoutAdaptiveData.length, withoutAdaptiveInfo.size);
-              assert.strictEqual('png', withoutAdaptiveInfo.format);
-              assert.strictEqual(320, withoutAdaptiveInfo.width);
-              assert.strictEqual(240, withoutAdaptiveInfo.height);
-              assert.strictEqual(true, withoutAdaptiveData.length < adaptiveData.length);
-              done();
-            });
-        });
-    });
-
-    it('Invalid PNG adaptiveFiltering value throws error', function () {
-      assert.throws(function () {
-        sharp().png({ adaptiveFiltering: 1 });
-      });
-    });
-  });
-
-  it('Without chroma subsampling generates larger file', function (done) {
-    // First generate with chroma subsampling (default)
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ chromaSubsampling: '4:2:0' })
-      .toBuffer(function (err, withChromaSubsamplingData, withChromaSubsamplingInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withChromaSubsamplingData.length > 0);
-        assert.strictEqual(withChromaSubsamplingData.length, withChromaSubsamplingInfo.size);
-        assert.strictEqual('jpeg', withChromaSubsamplingInfo.format);
-        assert.strictEqual(320, withChromaSubsamplingInfo.width);
-        assert.strictEqual(240, withChromaSubsamplingInfo.height);
-        // Then generate without
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ chromaSubsampling: '4:4:4' })
-          .toBuffer(function (err, withoutChromaSubsamplingData, withoutChromaSubsamplingInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withoutChromaSubsamplingData.length > 0);
-            assert.strictEqual(withoutChromaSubsamplingData.length, withoutChromaSubsamplingInfo.size);
-            assert.strictEqual('jpeg', withoutChromaSubsamplingInfo.format);
-            assert.strictEqual(320, withoutChromaSubsamplingInfo.width);
-            assert.strictEqual(240, withoutChromaSubsamplingInfo.height);
-            assert.strictEqual(true, withChromaSubsamplingData.length < withoutChromaSubsamplingData.length);
-            done();
-          });
-      });
-  });
-
-  it('Invalid JPEG chromaSubsampling value throws error', function () {
-    assert.throws(function () {
-      sharp().jpeg({ chromaSubsampling: '4:2:2' });
-    });
-  });
-
-  it('Trellis quantisation', function (done) {
-    // First generate without
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ trellisQuantisation: false })
-      .toBuffer(function (err, withoutData, withoutInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withoutData.length > 0);
-        assert.strictEqual(withoutData.length, withoutInfo.size);
-        assert.strictEqual('jpeg', withoutInfo.format);
-        assert.strictEqual(320, withoutInfo.width);
-        assert.strictEqual(240, withoutInfo.height);
-        // Then generate with
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ trellisQuantization: true })
-          .toBuffer(function (err, withData, withInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withData.length > 0);
-            assert.strictEqual(withData.length, withInfo.size);
-            assert.strictEqual('jpeg', withInfo.format);
-            assert.strictEqual(320, withInfo.width);
-            assert.strictEqual(240, withInfo.height);
-            // Verify image is same (as mozjpeg may not be present) size or less
-            assert.strictEqual(true, withData.length <= withoutData.length);
-            done();
-          });
-      });
-  });
-
-  it('Overshoot deringing', function (done) {
-    // First generate without
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ overshootDeringing: false })
-      .toBuffer(function (err, withoutData, withoutInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withoutData.length > 0);
-        assert.strictEqual(withoutData.length, withoutInfo.size);
-        assert.strictEqual('jpeg', withoutInfo.format);
-        assert.strictEqual(320, withoutInfo.width);
-        assert.strictEqual(240, withoutInfo.height);
-        // Then generate with
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ overshootDeringing: true })
-          .toBuffer(function (err, withData, withInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withData.length > 0);
-            assert.strictEqual(withData.length, withInfo.size);
-            assert.strictEqual('jpeg', withInfo.format);
-            assert.strictEqual(320, withInfo.width);
-            assert.strictEqual(240, withInfo.height);
-            done();
-          });
-      });
-  });
-
-  it('Optimise scans generates different output length', function (done) {
-    // First generate without
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ optimiseScans: false })
-      .toBuffer(function (err, withoutData, withoutInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withoutData.length > 0);
-        assert.strictEqual(withoutData.length, withoutInfo.size);
-        assert.strictEqual('jpeg', withoutInfo.format);
-        assert.strictEqual(320, withoutInfo.width);
-        assert.strictEqual(240, withoutInfo.height);
-        // Then generate with
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ optimizeScans: true })
-          .toBuffer(function (err, withData, withInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withData.length > 0);
-            assert.strictEqual(withData.length, withInfo.size);
-            assert.strictEqual('jpeg', withInfo.format);
-            assert.strictEqual(320, withInfo.width);
-            assert.strictEqual(240, withInfo.height);
-            // Verify image is of a different size (progressive output even without mozjpeg)
-            assert.notEqual(withData.length, withoutData.length);
-            done();
-          });
-      });
-  });
-
-  it('Optimise coding generates smaller output length', function (done) {
-    // First generate with optimize coding enabled (default)
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg()
-      .toBuffer(function (err, withOptimiseCoding, withInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withOptimiseCoding.length > 0);
-        assert.strictEqual(withOptimiseCoding.length, withInfo.size);
-        assert.strictEqual('jpeg', withInfo.format);
-        assert.strictEqual(320, withInfo.width);
-        assert.strictEqual(240, withInfo.height);
-        // Then generate with coding disabled
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ optimizeCoding: false })
-          .toBuffer(function (err, withoutOptimiseCoding, withoutInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withoutOptimiseCoding.length > 0);
-            assert.strictEqual(withoutOptimiseCoding.length, withoutInfo.size);
-            assert.strictEqual('jpeg', withoutInfo.format);
-            assert.strictEqual(320, withoutInfo.width);
-            assert.strictEqual(240, withoutInfo.height);
-            // Verify optimised image is of a smaller size
-            assert.strictEqual(true, withOptimiseCoding.length < withoutOptimiseCoding.length);
-            done();
-          });
-      });
-  });
-
-  it('Specifying quantisation table provides different JPEG', function (done) {
-    // First generate with default quantisation table
-    sharp(fixtures.inputJpg)
-      .resize(320, 240)
-      .jpeg({ optimiseCoding: false })
-      .toBuffer(function (err, withDefaultQuantisationTable, withInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, withDefaultQuantisationTable.length > 0);
-        assert.strictEqual(withDefaultQuantisationTable.length, withInfo.size);
-        assert.strictEqual('jpeg', withInfo.format);
-        assert.strictEqual(320, withInfo.width);
-        assert.strictEqual(240, withInfo.height);
-        // Then generate with different quantisation table
-        sharp(fixtures.inputJpg)
-          .resize(320, 240)
-          .jpeg({ optimiseCoding: false, quantisationTable: 3 })
-          .toBuffer(function (err, withQuantTable3, withoutInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, withQuantTable3.length > 0);
-            assert.strictEqual(withQuantTable3.length, withoutInfo.size);
-            assert.strictEqual('jpeg', withoutInfo.format);
-            assert.strictEqual(320, withoutInfo.width);
-            assert.strictEqual(240, withoutInfo.height);
-
-            // Verify image is same (as mozjpeg may not be present) size or less
-            assert.strictEqual(true, withQuantTable3.length <= withDefaultQuantisationTable.length);
-            done();
-          });
-      });
-  });
-
-  it('Convert SVG to PNG at default 72DPI', function (done) {
-    sharp(fixtures.inputSvg)
-      .resize(1024)
-      .extract({left: 290, top: 760, width: 40, height: 40})
-      .toFormat('png')
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(40, info.width);
-        assert.strictEqual(40, info.height);
-        fixtures.assertSimilar(fixtures.expected('svg72.png'), data, function (err) {
-          if (err) throw err;
-          sharp(data).metadata(function (err, info) {
-            if (err) throw err;
-            assert.strictEqual(72, info.density);
-            done();
-          });
-        });
-      });
-  });
-
-  it('Convert SVG to PNG at 1200DPI', function (done) {
-    sharp(fixtures.inputSvg, { density: 1200 })
-      .resize(1024)
-      .extract({left: 290, top: 760, width: 40, height: 40})
-      .toFormat('png')
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(40, info.width);
-        assert.strictEqual(40, info.height);
-        fixtures.assertSimilar(fixtures.expected('svg1200.png'), data, function (err) {
-          if (err) throw err;
-          sharp(data).metadata(function (err, info) {
-            if (err) throw err;
-            assert.strictEqual(1200, info.density);
-            done();
-          });
-        });
-      });
-  });
-
-  it('Convert SVG to PNG at 14.4DPI', function (done) {
-    sharp(fixtures.inputSvg, { density: 14.4 })
-      .toFormat('png')
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(20, info.width);
-        assert.strictEqual(20, info.height);
-        fixtures.assertSimilar(fixtures.expected('svg14.4.png'), data, function (err) {
-          if (err) throw err;
-          done();
-        });
-      });
-  });
-
-  it('Convert SVG with embedded images to PNG, respecting dimensions, autoconvert to PNG', function (done) {
-    sharp(fixtures.inputSvgWithEmbeddedImages)
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(480, info.width);
-        assert.strictEqual(360, info.height);
-        assert.strictEqual(4, info.channels);
-        fixtures.assertSimilar(fixtures.expected('svg-embedded.png'), data, done);
-      });
-  });
-
-  it('Load TIFF from Buffer', function (done) {
-    const inputTiffBuffer = fs.readFileSync(fixtures.inputTiff);
-    sharp(inputTiffBuffer)
-      .resize(320, 240)
-      .jpeg()
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
-        assert.strictEqual(data.length, info.size);
-        assert.strictEqual('jpeg', info.format);
-        assert.strictEqual(320, info.width);
-        assert.strictEqual(240, info.height);
-        done();
-      });
-  });
-
-  it('Load multi-page TIFF\'s from file', function (done) {
-    sharp(fixtures.inputTiffMultipage) // defaults to page 0
-      .jpeg()
-      .toBuffer(function (err, defaultData, defaultInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, defaultData.length > 0);
-        assert.strictEqual(defaultData.length, defaultInfo.size);
-        assert.strictEqual('jpeg', defaultInfo.format);
-
-        sharp(fixtures.inputTiffMultipage, { page: 1 }) // 50%-scale copy of page 0
-          .jpeg()
-          .toBuffer(function (err, scaledData, scaledInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, scaledData.length > 0);
-            assert.strictEqual(scaledData.length, scaledInfo.size);
-            assert.strictEqual('jpeg', scaledInfo.format);
-            assert.strictEqual(defaultInfo.width, scaledInfo.width * 2);
-            assert.strictEqual(defaultInfo.height, scaledInfo.height * 2);
-            done();
-          });
-      });
-  });
-
-  it('Load multi-page TIFF\'s from Buffer', function (done) {
-    const inputTiffBuffer = fs.readFileSync(fixtures.inputTiffMultipage);
-    sharp(inputTiffBuffer) // defaults to page 0
-      .jpeg()
-      .toBuffer(function (err, defaultData, defaultInfo) {
-        if (err) throw err;
-        assert.strictEqual(true, defaultData.length > 0);
-        assert.strictEqual(defaultData.length, defaultInfo.size);
-        assert.strictEqual('jpeg', defaultInfo.format);
-
-        sharp(inputTiffBuffer, { page: 1 }) // 50%-scale copy of page 0
-          .jpeg()
-          .toBuffer(function (err, scaledData, scaledInfo) {
-            if (err) throw err;
-            assert.strictEqual(true, scaledData.length > 0);
-            assert.strictEqual(scaledData.length, scaledInfo.size);
-            assert.strictEqual('jpeg', scaledInfo.format);
-            assert.strictEqual(defaultInfo.width, scaledInfo.width * 2);
-            assert.strictEqual(defaultInfo.height, scaledInfo.height * 2);
-            done();
-          });
-      });
-  });
-
-  it('Save TIFF to Buffer', function (done) {
-    sharp(fixtures.inputTiff)
-      .resize(320, 240)
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
-        assert.strictEqual(data.length, info.size);
-        assert.strictEqual('tiff', info.format);
-        assert.strictEqual(320, info.width);
-        assert.strictEqual(240, info.height);
-        done();
-      });
-  });
-
-  it('Invalid WebP quality throws error', function () {
-    assert.throws(function () {
-      sharp().webp({ quality: 101 });
-    });
-  });
-
-  it('Invalid WebP alpha quality throws error', function () {
-    assert.throws(function () {
-      sharp().webp({ alphaQuality: 101 });
-    });
-  });
-
-  it('Invalid TIFF quality throws error', function () {
-    assert.throws(function () {
-      sharp().tiff({ quality: 101 });
-    });
-  });
-
-  it('Missing TIFF quality does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff();
-    });
-  });
-
-  it('Not squashing TIFF to a bit depth of 1 should not change the file size', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiff8BitDepth).size;
-    sharp(fixtures.inputTiff8BitDepth)
-      .toColourspace('b-w') // can only squash 1 band uchar images
-      .tiff({
-        squash: false,
-        compression: 'none',
-        predictor: 'none'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size === startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('Squashing TIFF to a bit depth of 1 should significantly reduce file size', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiff8BitDepth).size;
-    sharp(fixtures.inputTiff8BitDepth)
-      .toColourspace('b-w') // can only squash 1 band uchar images
-      .tiff({
-        squash: true,
-        compression: 'none',
-        predictor: 'none'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < (startSize / 2));
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('Invalid TIFF squash value throws error', function () {
-    assert.throws(function () {
-      sharp().tiff({ squash: 'true' });
-    });
-  });
-
-  it('TIFF setting xres and yres on file', function (done) {
-    const res = 1000.0; // inputTiff has a dpi of 300 (res*2.54)
-    sharp(fixtures.inputTiff)
-      .tiff({
-        xres: (res),
-        yres: (res)
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        sharp(fixtures.outputTiff).metadata(function (err, metadata) {
-          if (err) throw err;
-          assert.strictEqual(metadata.density, res * 2.54); // convert to dpi
-          fs.unlink(fixtures.outputTiff, done);
-        });
-      });
-  });
-
-  it('TIFF setting xres and yres on buffer', function (done) {
-    const res = 1000.0; // inputTiff has a dpi of 300 (res*2.54)
-    sharp(fixtures.inputTiff)
-      .tiff({
-        xres: (res),
-        yres: (res)
-      })
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        sharp(data).metadata(function (err, metadata) {
-          if (err) throw err;
-          assert.strictEqual(metadata.density, res * 2.54); // convert to dpi
-          done();
-        });
-      });
-  });
-
-  it('TIFF invalid xres value should throw an error', function () {
-    assert.throws(function () {
-      sharp().tiff({ xres: '1000.0' });
-    });
-  });
-
-  it('TIFF invalid yres value should throw an error', function () {
-    assert.throws(function () {
-      sharp().tiff({ yres: '1000.0' });
-    });
-  });
-
-  it('TIFF lzw compression with horizontal predictor shrinks test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiffUncompressed).size;
-    sharp(fixtures.inputTiffUncompressed)
-      .tiff({
-        compression: 'lzw',
-        predictor: 'horizontal'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF ccittfax4 compression shrinks b-w test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiff).size;
-    sharp(fixtures.inputTiff)
-      .toColourspace('b-w')
-      .tiff({
-        squash: true,
-        compression: 'ccittfax4'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF deflate compression with horizontal predictor shrinks test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiffUncompressed).size;
-    sharp(fixtures.inputTiffUncompressed)
-      .tiff({
-        compression: 'deflate',
-        predictor: 'horizontal'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF deflate compression with float predictor shrinks test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiffUncompressed).size;
-    sharp(fixtures.inputTiffUncompressed)
-      .tiff({
-        compression: 'deflate',
-        predictor: 'float'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF deflate compression without predictor shrinks test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiffUncompressed).size;
-    sharp(fixtures.inputTiffUncompressed)
-      .tiff({
-        compression: 'deflate',
-        predictor: 'none'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF jpeg compression shrinks test file', function (done) {
-    const startSize = fs.statSync(fixtures.inputTiffUncompressed).size;
-    sharp(fixtures.inputTiffUncompressed)
-      .tiff({
-        compression: 'jpeg'
-      })
-      .toFile(fixtures.outputTiff, (err, info) => {
-        if (err) throw err;
-        assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        fs.unlink(fixtures.outputTiff, done);
-      });
-  });
-
-  it('TIFF none compression does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ compression: 'none' });
-    });
-  });
-
-  it('TIFF lzw compression does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ compression: 'lzw' });
-    });
-  });
-
-  it('TIFF deflate compression does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ compression: 'deflate' });
-    });
-  });
-
-  it('TIFF invalid compression option throws', function () {
-    assert.throws(function () {
-      sharp().tiff({ compression: 0 });
-    });
-  });
-
-  it('TIFF invalid compression option throws', function () {
-    assert.throws(function () {
-      sharp().tiff({ compression: 'a' });
-    });
-  });
-
-  it('TIFF invalid predictor option throws', function () {
-    assert.throws(function () {
-      sharp().tiff({ predictor: 'a' });
-    });
-  });
-
-  it('TIFF horizontal predictor does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ predictor: 'horizontal' });
-    });
-  });
-
-  it('TIFF float predictor does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ predictor: 'float' });
-    });
-  });
-
-  it('TIFF none predictor does not throw error', function () {
-    assert.doesNotThrow(function () {
-      sharp().tiff({ predictor: 'none' });
     });
   });
 
@@ -1308,6 +502,17 @@ describe('Input/output', function () {
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
         done();
+      });
+  });
+
+  it('Can force output format with output chaining', function () {
+    return sharp(fixtures.inputJpg)
+      .resize(320, 240)
+      .png({ force: true })
+      .jpeg({ force: false })
+      .toBuffer({ resolveWithObject: true })
+      .then(function (out) {
+        assert.strictEqual('png', out.info.format);
       });
   });
 
@@ -1331,37 +536,6 @@ describe('Input/output', function () {
       });
   });
 
-  it('Load GIF from Buffer', function (done) {
-    const inputGifBuffer = fs.readFileSync(fixtures.inputGif);
-    sharp(inputGifBuffer)
-      .resize(320, 240)
-      .jpeg()
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
-        assert.strictEqual(data.length, info.size);
-        assert.strictEqual('jpeg', info.format);
-        assert.strictEqual(320, info.width);
-        assert.strictEqual(240, info.height);
-        done();
-      });
-  });
-
-  it('Load GIF grey+alpha from file, auto convert to PNG', function (done) {
-    sharp(fixtures.inputGifGreyPlusAlpha)
-      .resize(8, 4)
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual(true, data.length > 0);
-        assert.strictEqual(data.length, info.size);
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(8, info.width);
-        assert.strictEqual(4, info.height);
-        assert.strictEqual(4, info.channels);
-        done();
-      });
-  });
-
   it('Load Vips V file', function (done) {
     sharp(fixtures.inputV)
       .jpeg()
@@ -1377,234 +551,126 @@ describe('Input/output', function () {
 
   it('Save Vips V file', function (done) {
     sharp(fixtures.inputJpg)
-      .extract({left: 910, top: 1105, width: 70, height: 60})
+      .extract({ left: 910, top: 1105, width: 70, height: 60 })
       .toFile(fixtures.outputV, function (err, info) {
         if (err) throw err;
         assert.strictEqual(true, info.size > 0);
         assert.strictEqual('v', info.format);
         assert.strictEqual(70, info.width);
         assert.strictEqual(60, info.height);
-        fs.unlinkSync(fixtures.outputV);
-        done();
+        rimraf(fixtures.outputV, done);
       });
   });
 
-  describe('Ouput raw, uncompressed image data', function () {
-    it('1 channel greyscale image', function (done) {
-      sharp(fixtures.inputJpg)
-        .greyscale()
-        .resize(32, 24)
-        .raw()
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(32 * 24 * 1, info.size);
-          assert.strictEqual(data.length, info.size);
-          assert.strictEqual('raw', info.format);
-          assert.strictEqual(32, info.width);
-          assert.strictEqual(24, info.height);
-          done();
-        });
-    });
-    it('3 channel colour image without transparency', function (done) {
-      sharp(fixtures.inputJpg)
-        .resize(32, 24)
-        .toFormat('raw')
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(32 * 24 * 3, info.size);
-          assert.strictEqual(data.length, info.size);
-          assert.strictEqual('raw', info.format);
-          assert.strictEqual(32, info.width);
-          assert.strictEqual(24, info.height);
-          done();
-        });
-    });
-    it('4 channel colour image with transparency', function (done) {
-      sharp(fixtures.inputPngWithTransparency)
-        .resize(32, 24)
-        .toFormat(sharp.format.raw)
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(32 * 24 * 4, info.size);
-          assert.strictEqual(data.length, info.size);
-          assert.strictEqual('raw', info.format);
-          assert.strictEqual(32, info.width);
-          assert.strictEqual(24, info.height);
-          done();
-        });
-    });
-  });
-
-  describe('Limit pixel count of input image', function () {
-    it('Invalid fails - negative', function (done) {
-      let isValid = false;
-      try {
-        sharp().limitInputPixels(-1);
-        isValid = true;
-      } catch (e) {}
-      assert(!isValid);
-      done();
-    });
-
-    it('Invalid fails - float', function (done) {
-      let isValid = false;
-      try {
-        sharp().limitInputPixels(12.3);
-        isValid = true;
-      } catch (e) {}
-      assert(!isValid);
-      done();
-    });
-
-    it('Invalid fails - string', function (done) {
-      let isValid = false;
-      try {
-        sharp().limitInputPixels('fail');
-        isValid = true;
-      } catch (e) {}
-      assert(!isValid);
-      done();
-    });
-
-    it('Same size as input works', function (done) {
-      sharp(fixtures.inputJpg).metadata(function (err, metadata) {
-        if (err) throw err;
-        sharp(fixtures.inputJpg)
-          .limitInputPixels(metadata.width * metadata.height)
-          .toBuffer(function (err) {
-            assert.strictEqual(true, !err);
-            done();
-          });
+  describe('Limit pixel count of input image', () => {
+    it('Invalid fails - negative', () => {
+      assert.throws(() => {
+        sharp({ limitInputPixels: -1 });
       });
     });
 
-    it('Disabling limit works', function (done) {
-      sharp(fixtures.inputJpgLarge)
-        .limitInputPixels(false)
+    it('Invalid fails - float', () => {
+      assert.throws(() => {
+        sharp({ limitInputPixels: 12.3 });
+      });
+    });
+
+    it('Invalid fails - string', () => {
+      assert.throws(() => {
+        sharp({ limitInputPixels: 'fail' });
+      });
+    });
+
+    it('Same size as input works', () =>
+      sharp(fixtures.inputJpg)
+        .metadata()
+        .then(({ width, height }) =>
+          sharp(fixtures.inputJpg, { limitInputPixels: width * height }).toBuffer()
+        )
+    );
+
+    it('Disabling limit works', () =>
+      sharp(fixtures.inputJpgLarge, { limitInputPixels: false })
         .resize(2)
-        .toBuffer(function (err) {
-          assert.strictEqual(true, !err);
-          done();
-        });
-    });
+        .toBuffer()
+    );
 
-    it('Enabling default limit works and fails with a large image', function (done) {
-      sharp(fixtures.inputJpgLarge)
-        .limitInputPixels(true)
-        .toBuffer(function (err) {
-          assert.strictEqual(true, !!err);
-          done();
-        });
-    });
+    it('Enabling default limit works and fails with a large image', () =>
+      sharp(fixtures.inputJpgLarge, { limitInputPixels: true })
+        .toBuffer()
+        .then(() => {
+          assert.fail('Expected to fail');
+        })
+        .catch(err => {
+          assert.strictEqual(err.message, 'Input image exceeds pixel limit');
+        })
+    );
 
-    it('Smaller than input fails', function (done) {
-      sharp(fixtures.inputJpg).metadata(function (err, metadata) {
-        if (err) throw err;
-        sharp(fixtures.inputJpg)
-          .limitInputPixels((metadata.width * metadata.height) - 1)
-          .toBuffer(function (err) {
-            assert.strictEqual(true, !!err);
-            done();
-          });
-      });
-    });
+    it('Smaller than input fails', () =>
+      sharp(fixtures.inputJpg)
+        .metadata()
+        .then(({ width, height }) =>
+          sharp(fixtures.inputJpg, { limitInputPixels: width * height - 1 })
+            .toBuffer()
+            .then(() => {
+              assert.fail('Expected to fail');
+            })
+            .catch(err => {
+              assert.strictEqual(err.message, 'Input image exceeds pixel limit');
+            })
+        )
+    );
   });
 
   describe('Input options', function () {
+    it('Option-less', function () {
+      sharp();
+    });
+    it('Ignore unknown attribute', function () {
+      sharp({ unknown: true });
+    });
+    it('undefined with options fails', function () {
+      assert.throws(function () {
+        sharp(undefined, {});
+      }, /Unsupported input 'undefined' of type undefined when also providing options of type object/);
+    });
+    it('null with options fails', function () {
+      assert.throws(function () {
+        sharp(null, {});
+      }, /Unsupported input 'null' of type object when also providing options of type object/);
+    });
     it('Non-Object options fails', function () {
       assert.throws(function () {
-        sharp(null, 'zoinks');
-      });
+        sharp('test', 'zoinks');
+      }, /Invalid input options zoinks/);
     });
     it('Invalid density: string', function () {
       assert.throws(function () {
-        sharp(null, { density: 'zoinks' });
-      });
+        sharp({ density: 'zoinks' });
+      }, /Expected number between 1 and 2400 for density but received zoinks of type string/);
     });
-    it('Ignore unknown attribute', function () {
-      sharp(null, { unknown: true });
-    });
-  });
-
-  describe('Raw pixel input', function () {
-    it('Missing options', function () {
+    it('Invalid page property throws', function () {
       assert.throws(function () {
-        sharp({ raw: {} });
-      });
+        sharp({ page: -1 });
+      }, /Expected integer between 0 and 100000 for page but received -1 of type number/);
     });
-    it('Incomplete options', function () {
+    it('Invalid pages property throws', function () {
       assert.throws(function () {
-        sharp({ raw: { width: 1, height: 1 } });
-      });
+        sharp({ pages: '1' });
+      }, /Expected integer between -1 and 100000 for pages but received 1 of type string/);
     });
-    it('Invalid channels', function () {
+    it('Valid level property', function () {
+      sharp({ level: 1 });
+    });
+    it('Invalid level property (string) throws', function () {
       assert.throws(function () {
-        sharp({ raw: { width: 1, height: 1, channels: 5 } });
-      });
+        sharp({ level: '1' });
+      }, /Expected integer between 0 and 256 for level but received 1 of type string/);
     });
-    it('Invalid height', function () {
+    it('Invalid level property (negative) throws', function () {
       assert.throws(function () {
-        sharp({ raw: { width: 1, height: 0, channels: 4 } });
-      });
-    });
-    it('Invalid width', function () {
-      assert.throws(function () {
-        sharp({ raw: { width: 'zoinks', height: 1, channels: 4 } });
-      });
-    });
-    it('RGB', function (done) {
-      // Convert to raw pixel data
-      sharp(fixtures.inputJpg)
-        .resize(256)
-        .raw()
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(256, info.width);
-          assert.strictEqual(209, info.height);
-          assert.strictEqual(3, info.channels);
-          // Convert back to JPEG
-          sharp(data, {
-            raw: {
-              width: info.width,
-              height: info.height,
-              channels: info.channels
-            }})
-            .jpeg()
-            .toBuffer(function (err, data, info) {
-              if (err) throw err;
-              assert.strictEqual(256, info.width);
-              assert.strictEqual(209, info.height);
-              assert.strictEqual(3, info.channels);
-              fixtures.assertSimilar(fixtures.inputJpg, data, done);
-            });
-        });
-    });
-    it('RGBA', function (done) {
-      // Convert to raw pixel data
-      sharp(fixtures.inputPngOverlayLayer1)
-        .resize(256)
-        .raw()
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(256, info.width);
-          assert.strictEqual(192, info.height);
-          assert.strictEqual(4, info.channels);
-          // Convert back to PNG
-          sharp(data, {
-            raw: {
-              width: info.width,
-              height: info.height,
-              channels: info.channels
-            }})
-            .png()
-            .toBuffer(function (err, data, info) {
-              if (err) throw err;
-              assert.strictEqual(256, info.width);
-              assert.strictEqual(192, info.height);
-              assert.strictEqual(4, info.channels);
-              fixtures.assertSimilar(fixtures.inputPngOverlayLayer1, data, { threshold: 7 }, done);
-            });
-        });
+        sharp({ level: -1 });
+      }, /Expected integer between 0 and 256 for level but received -1 of type number/);
     });
   });
 
@@ -1697,7 +763,7 @@ describe('Input/output', function () {
         assert.strictEqual(472, info.height);
         assert.strictEqual(3, info.channels);
       });
-    const badPipeline = sharp(null, {raw: {width: 840, height: 500, channels: 3}})
+    const badPipeline = sharp({ raw: { width: 840, height: 500, channels: 3 } })
       .toFormat('jpeg')
       .toBuffer(function (err, data, info) {
         assert.strictEqual(err.message.indexOf('memory area too small') > 0, true);
@@ -1705,7 +771,7 @@ describe('Input/output', function () {
         const inPipeline = sharp()
           .resize(840, 472)
           .raw();
-        const goodPipeline = sharp(null, {raw: {width: 840, height: 472, channels: 3}})
+        const goodPipeline = sharp({ raw: { width: 840, height: 472, channels: 3 } })
           .toFormat('jpeg')
           .toBuffer(function (err, data, info) {
             if (err) throw err;

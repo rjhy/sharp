@@ -16,22 +16,43 @@ sharp('rgba.png')
 
 Returns **Sharp** 
 
+## ensureAlpha
+
+Ensure alpha channel, if missing. The added alpha channel will be fully opaque. This is a no-op if the image already has an alpha channel.
+
+### Examples
+
+```javascript
+sharp('rgb.jpg')
+  .ensureAlpha()
+  .toFile('rgba.png', function(err, info) {
+    // rgba.png is a 4 channel image with a fully opaque alpha channel
+  });
+```
+
+Returns **Sharp** 
+
+**Meta**
+
+-   **since**: 0.21.2
+
 ## extractChannel
 
 Extract a single channel from a multi-channel image.
 
 ### Parameters
 
--   `channel` **([Number][1] \| [String][2])** zero-indexed band number to extract, or `red`, `green` or `blue` as alternative to `0`, `1` or `2` respectively.
+-   `channel` **([number][1] \| [string][2])** zero-indexed channel/band number to extract, or `red`, `green`, `blue` or `alpha`.
 
 ### Examples
 
 ```javascript
 sharp(input)
   .extractChannel('green')
-  .toFile('input_green.jpg', function(err, info) {
+  .toColourspace('b-w')
+  .toFile('green.jpg', function(err, info) {
     // info.channels === 1
-    // input_green.jpg contains the green channel of the input image
+    // green.jpg is a greyscale image containing the green channel of the input
    });
 ```
 
@@ -54,7 +75,7 @@ For raw pixel input, the `options` object should contain a `raw` attribute, whic
 
 ### Parameters
 
--   `images` **([Array][4]&lt;([String][2] \| [Buffer][5])> | [String][2] \| [Buffer][5])** one or more images (file paths, Buffers).
+-   `images` **([Array][4]&lt;([string][2] \| [Buffer][5])> | [string][2] \| [Buffer][5])** one or more images (file paths, Buffers).
 -   `options` **[Object][6]** image options, see `sharp()` constructor.
 
 
@@ -68,7 +89,7 @@ Perform a bitwise boolean operation on all input image channels (bands) to produ
 
 ### Parameters
 
--   `boolOp` **[String][2]** one of `and`, `or` or `eor` to perform that bitwise operation, like the C logic operators `&`, `|` and `^` respectively.
+-   `boolOp` **[string][2]** one of `and`, `or` or `eor` to perform that bitwise operation, like the C logic operators `&`, `|` and `^` respectively.
 
 ### Examples
 

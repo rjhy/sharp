@@ -59,12 +59,12 @@ describe('Image channel extraction', function () {
     sharp(fixtures.inputJpg)
       .toColourspace('lch')
       .extractChannel(1)
-      .resize(320, 240)
+      .resize(320, 240, { fastShrinkOnLoad: false })
       .toFile(output, function (err, info) {
         if (err) throw err;
         assert.strictEqual(320, info.width);
         assert.strictEqual(240, info.height);
-        fixtures.assertMaxColourDistance(output, fixtures.expected('extract-lch.jpg'));
+        fixtures.assertMaxColourDistance(output, fixtures.expected('extract-lch.jpg'), 9);
         done();
       });
   });
@@ -76,6 +76,19 @@ describe('Image channel extraction', function () {
       .toFile(output, function (err, info) {
         if (err) throw err;
         fixtures.assertMaxColourDistance(output, fixtures.expected('extract-alpha-16bit.jpg'));
+        done();
+      });
+  });
+
+  it('Alpha from 2-channel input', function (done) {
+    const output = fixtures.path('output.extract-alpha-2-channel.png');
+    sharp(fixtures.inputPngWithGreyAlpha)
+      .extractChannel('alpha')
+      .toColourspace('b-w')
+      .toFile(output, function (err, info) {
+        if (err) throw err;
+        assert.strictEqual(1, info.channels);
+        fixtures.assertMaxColourDistance(output, fixtures.expected('extract-alpha-2-channel.png'));
         done();
       });
   });

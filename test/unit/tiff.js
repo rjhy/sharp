@@ -1,12 +1,15 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const fs = require('fs');
 const assert = require('assert');
-const promisify = require('util').promisify;
-const rimraf = require('rimraf');
 
 const sharp = require('../../');
 const fixtures = require('../fixtures');
+
+const outputTiff = fixtures.path('output.tiff');
 
 describe('TIFF', function () {
   it('Load TIFF from Buffer', function (done) {
@@ -88,9 +91,11 @@ describe('TIFF', function () {
 
   it('Increasing TIFF quality increases file size', () =>
     sharp(fixtures.inputJpgWithLandscapeExif1)
+      .resize(320, 240)
       .tiff({ quality: 40 })
       .toBuffer()
       .then(tiff40 => sharp(fixtures.inputJpgWithLandscapeExif1)
+        .resize(320, 240)
         .tiff({ quality: 90 })
         .toBuffer()
         .then(tiff90 =>
@@ -116,15 +121,15 @@ describe('TIFF', function () {
     sharp(fixtures.inputTiff8BitDepth)
       .toColourspace('b-w') // can only squash 1 band uchar images
       .tiff({
-        squash: false,
+        bitdepth: 8,
         compression: 'none',
         predictor: 'none'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert.strictEqual(startSize, info.size);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -133,44 +138,44 @@ describe('TIFF', function () {
     sharp(fixtures.inputTiff8BitDepth)
       .toColourspace('b-w') // can only squash 1 band uchar images
       .tiff({
-        squash: true,
+        bitdepth: 1,
         compression: 'none',
         predictor: 'none'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size < (startSize / 2));
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
-  it('Invalid TIFF squash value throws error', function () {
+  it('Invalid TIFF bitdepth value throws error', function () {
     assert.throws(function () {
-      sharp().tiff({ squash: 'true' });
-    });
+      sharp().tiff({ bitdepth: 3 });
+    }, /Error: Expected 1, 2, 4 or 8 for bitdepth but received 3 of type number/);
   });
 
   it('TIFF setting xres and yres on file', () =>
     sharp(fixtures.inputTiff)
+      .resize(8, 8)
       .tiff({
         xres: 1000,
         yres: 1000
       })
-      .toFile(fixtures.outputTiff)
-      .then(() => sharp(fixtures.outputTiff)
+      .toFile(outputTiff)
+      .then(() => sharp(outputTiff)
         .metadata()
         .then(({ density }) => {
-          assert.strictEqual(true,
-            density === 2540 || // libvips <= 8.8.2
-            density === 25400); // libvips >= 8.8.3
-          return promisify(rimraf)(fixtures.outputTiff);
+          assert.strictEqual(25400, density);
+          return fs.promises.rm(outputTiff);
         })
       )
   );
 
   it('TIFF setting xres and yres on buffer', () =>
     sharp(fixtures.inputTiff)
+      .resize(8, 8)
       .tiff({
         xres: 1000,
         yres: 1000
@@ -179,12 +184,30 @@ describe('TIFF', function () {
       .then(data => sharp(data)
         .metadata()
         .then(({ density }) => {
-          assert.strictEqual(true,
-            density === 2540 || // libvips <= 8.8.2
-            density === 25400); // libvips >= 8.8.3
+          assert.strictEqual(25400, density);
         })
       )
   );
+
+  it('TIFF imputes xres and yres from withMetadataDensity if not explicitly provided', async () => {
+    const data = await sharp(fixtures.inputTiff)
+      .resize(8, 8)
+      .tiff()
+      .withMetadata({ density: 600 })
+      .toBuffer();
+    const { density } = await sharp(data).metadata();
+    assert.strictEqual(600, density);
+  });
+
+  it('TIFF uses xres and yres over withMetadataDensity if explicitly provided', async () => {
+    const data = await sharp(fixtures.inputTiff)
+      .resize(8, 8)
+      .tiff({ xres: 1000, yres: 1000 })
+      .withMetadata({ density: 600 })
+      .toBuffer();
+    const { density } = await sharp(data).metadata();
+    assert.strictEqual(25400, density);
+  });
 
   it('TIFF invalid xres value should throw an error', function () {
     assert.throws(function () {
@@ -205,12 +228,12 @@ describe('TIFF', function () {
         compression: 'lzw',
         predictor: 'horizontal'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert.strictEqual(3, info.channels);
         assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -226,7 +249,7 @@ describe('TIFF', function () {
       .tiff({
         compression: 'lzw'
       })
-      .toFile(fixtures.outputTiff)
+      .toFile(outputTiff)
       .then(info => {
         assert.strictEqual(4, info.channels);
       })
@@ -255,15 +278,39 @@ describe('TIFF', function () {
     sharp(fixtures.inputTiff)
       .toColourspace('b-w')
       .tiff({
-        squash: true,
+        bitdepth: 1,
         compression: 'ccittfax4'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
+  });
+
+  it('TIFF resolutionUnit of inch (default)', async () => {
+    const data = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } })
+      .tiff()
+      .toBuffer();
+    const { resolutionUnit } = await sharp(data).metadata();
+    assert.strictEqual(resolutionUnit, 'inch');
+  });
+
+  it('TIFF resolutionUnit of inch', async () => {
+    const data = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } })
+      .tiff({ resolutionUnit: 'inch' })
+      .toBuffer();
+    const { resolutionUnit } = await sharp(data).metadata();
+    assert.strictEqual(resolutionUnit, 'inch');
+  });
+
+  it('TIFF resolutionUnit of cm', async () => {
+    const data = await sharp({ create: { width: 8, height: 8, channels: 3, background: 'red' } })
+      .tiff({ resolutionUnit: 'cm' })
+      .toBuffer();
+    const { resolutionUnit } = await sharp(data).metadata();
+    assert.strictEqual(resolutionUnit, 'cm');
   });
 
   it('TIFF deflate compression with horizontal predictor shrinks test file', function (done) {
@@ -273,11 +320,11 @@ describe('TIFF', function () {
         compression: 'deflate',
         predictor: 'horizontal'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -288,11 +335,11 @@ describe('TIFF', function () {
         compression: 'deflate',
         predictor: 'float'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
-        assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        assert(startSize > info.size);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -303,11 +350,11 @@ describe('TIFF', function () {
         compression: 'deflate',
         predictor: 'none'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -317,11 +364,11 @@ describe('TIFF', function () {
       .tiff({
         compression: 'jpeg'
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size < startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -361,6 +408,12 @@ describe('TIFF', function () {
     });
   });
 
+  it('TIFF invalid resolutionUnit option throws', function () {
+    assert.throws(function () {
+      sharp().tiff({ resolutionUnit: 'none' });
+    });
+  });
+
   it('TIFF horizontal predictor does not throw error', function () {
     assert.doesNotThrow(function () {
       sharp().tiff({ predictor: 'horizontal' });
@@ -389,11 +442,11 @@ describe('TIFF', function () {
         tileHeight: 256,
         tileWidth: 256
       })
-      .toFile(fixtures.outputTiff, (err, info) => {
+      .toFile(outputTiff, (err, info) => {
         if (err) throw err;
         assert.strictEqual('tiff', info.format);
         assert(info.size > startSize);
-        rimraf(fixtures.outputTiff, done);
+        fs.rm(outputTiff, done);
       });
   });
 
@@ -406,6 +459,18 @@ describe('TIFF', function () {
   it('Invalid TIFF pyramid value throws error', function () {
     assert.throws(function () {
       sharp().tiff({ pyramid: 'true' });
+    });
+  });
+
+  it('TIFF miniswhite true value does not throw error', function () {
+    assert.doesNotThrow(function () {
+      sharp().tiff({ miniswhite: true });
+    });
+  });
+
+  it('Invalid TIFF miniswhite value throws error', function () {
+    assert.throws(function () {
+      sharp().tiff({ miniswhite: 'true' });
     });
   });
 

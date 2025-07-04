@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const imagemagick = require('imagemagick');
@@ -9,7 +12,6 @@ const sharp = require('../../');
 const fixtures = require('../fixtures');
 
 sharp.cache(false);
-sharp.simd(true);
 
 const min = 320;
 const max = 960;
@@ -23,7 +25,7 @@ new Benchmark.Suite('random').add('imagemagick', {
   fn: function (deferred) {
     imagemagick.resize({
       srcPath: fixtures.inputJpg,
-      dstPath: fixtures.outputJpg,
+      dstPath: fixtures.path('output.jpg'),
       quality: 0.8,
       width: randomDimension(),
       height: randomDimension(),

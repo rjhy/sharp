@@ -16,35 +16,32 @@ If a [similar request](https://github.com/lovell/sharp/labels/enhancement) exist
 it's probably fastest to add a comment to it about your requirement.
 
 Implementation is usually straightforward if libvips
-[already supports](https://libvips.github.io/libvips/API/current/func-list.html)
+[already supports](https://www.libvips.org/API/current/func-list.html)
 the feature you need.
 
 ## Submit a Pull Request to fix a bug
 
 Thank you! To prevent the problem occurring again, please add unit tests that would have failed.
 
-Please select the `master` branch as the destination for your Pull Request so your fix can be included in the next minor release.
+Please select the `main` branch as the destination for your Pull Request so your fix can be included in the next minor release.
 
-Please squash your changes into a single commit using a command like `git rebase -i upstream/master`.
+Please squash your changes into a single commit using a command like `git rebase -i upstream/main`.
 
-To test C++ changes, you can compile the module using `npm install` and then run the tests using `npm test`.
+To test C++ changes, you can compile the module using `npm install --build-from-source` and then run the tests using `npm test`.
 
 ## Submit a Pull Request with a new feature
 
-Please add JavaScript [unit tests](https://github.com/lovell/sharp/tree/master/test/unit) to cover your new feature.
+Please add JavaScript [unit tests](https://github.com/lovell/sharp/tree/main/test/unit) to cover your new feature.
 A test coverage report for the JavaScript code is generated in the `coverage/lcov-report` directory.
+Please also update the [TypeScript definitions](https://github.com/lovell/sharp/tree/main/lib/index.d.ts), along with the [type definition tests](https://github.com/lovell/sharp/tree/main/test/types/sharp.test-d.ts).
 
 Where possible, the functional tests use gradient-based perceptual hashes
 based on [dHash](http://www.hackerfactor.com/blog/index.php?/archives/529-Kind-of-Like-That.html)
 to compare expected vs actual images.
 
-You deserve to add your details to the [list of contributors](https://github.com/lovell/sharp/blob/master/package.json#L5).
+You deserve to add your details to the [list of contributors](https://github.com/lovell/sharp/blob/main/package.json#L5).
 
 Any change that modifies the existing public API should be added to the relevant work-in-progress branch for inclusion in the next major release.
-
-| Release | WIP branch |
-| ------: | :--------- |
-| v0.26.0 | zoom       |
 
 Please squash your changes into a single commit using a command like `git rebase -i upstream/<wip-branch>`.
 
@@ -66,7 +63,7 @@ By way of example, the `background()` method present in v0.20.0 was deprecated i
 
 ## Documentation
 
-The public API is documented with [JSDoc](http://usejsdoc.org/) annotated comments.
+The public API is documented with [JSDoc](https://jsdoc.app/) annotated comments.
 
 These can be converted to Markdown by running:
 ```sh
@@ -97,5 +94,5 @@ Please feel free to ask any questions via a
 [new issue](https://github.com/lovell/sharp/issues/new).
 
 If you're unable to post details publicly, please
-[e-mail](https://github.com/lovell/sharp/blob/master/package.json#L5)
+[e-mail](https://github.com/lovell/sharp/blob/main/package.json#L5)
 for private, paid consulting.

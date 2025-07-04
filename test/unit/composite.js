@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -45,22 +48,20 @@ const blends = [
 
 // Test
 describe('composite', () => {
-  it('blend', () => Promise.all(
-    blends.map(blend => {
+  blends.forEach(blend => {
+    it(`blend ${blend}`, async () => {
       const filename = `composite.blend.${blend}.png`;
       const actual = fixtures.path(`output.${filename}`);
       const expected = fixtures.expected(filename);
-      return sharp(redRect)
+      await sharp(redRect)
         .composite([{
           input: blueRect,
           blend
         }])
-        .toFile(actual)
-        .then(() => {
-          fixtures.assertMaxColourDistance(actual, expected);
-        });
-    })
-  ));
+        .toFile(actual);
+      fixtures.assertMaxColourDistance(actual, expected);
+    });
+  });
 
   it('premultiplied true', () => {
     const filename = 'composite.premultiplied.png';
@@ -121,11 +122,31 @@ describe('composite', () => {
       });
   });
 
-  it('multiple', () => {
+  it('scrgb pipeline', () => {
+    const filename = 'composite-red-scrgb.png';
+    const actual = fixtures.path(`output.${filename}`);
+    const expected = fixtures.expected(filename);
+    return sharp({
+      create: {
+        width: 32, height: 32, channels: 4, background: red
+      }
+    })
+      .pipelineColourspace('scrgb')
+      .composite([{
+        input: fixtures.inputPngWithTransparency16bit,
+        blend: 'color-burn'
+      }])
+      .toFile(actual)
+      .then(() => {
+        fixtures.assertMaxColourDistance(actual, expected);
+      });
+  });
+
+  it('multiple', async () => {
     const filename = 'composite-multiple.png';
     const actual = fixtures.path(`output.${filename}`);
     const expected = fixtures.expected(filename);
-    return sharp(redRect)
+    await sharp(redRect)
       .composite([{
         input: blueRect,
         gravity: 'northeast'
@@ -133,10 +154,24 @@ describe('composite', () => {
         input: greenRect,
         gravity: 'southwest'
       }])
-      .toFile(actual)
-      .then(() => {
-        fixtures.assertMaxColourDistance(actual, expected);
-      });
+      .toFile(actual);
+    fixtures.assertMaxColourDistance(actual, expected);
+  });
+
+  it('autoOrient', async () => {
+    const data = await sharp({
+      create: {
+        width: 600, height: 600, channels: 4, background: { ...red, alpha: 1 }
+      }
+    })
+      .composite([{
+        input: fixtures.inputJpgWithExif,
+        autoOrient: true
+      }])
+      .jpeg()
+      .toBuffer();
+
+    await fixtures.assertSimilar(fixtures.expected('composite-autoOrient.jpg'), data);
   });
 
   it('zero offset', done => {
@@ -169,6 +204,24 @@ describe('composite', () => {
         assert.strictEqual('jpeg', info.format);
         assert.strictEqual(3, info.channels);
         fixtures.assertSimilar(fixtures.expected('overlay-offset-with-gravity.jpg'), data, done);
+      });
+  });
+
+  it('negative offset and gravity', done => {
+    sharp(fixtures.inputJpg)
+      .resize(400)
+      .composite([{
+        input: fixtures.inputPngWithTransparency16bit,
+        left: -10,
+        top: -10,
+        gravity: 4
+      }])
+      .toBuffer((err, data, info) => {
+        if (err) throw err;
+        assert.strictEqual('jpeg', info.format);
+        assert.strictEqual(3, info.channels);
+        fixtures.assertSimilar(
+          fixtures.expected('overlay-negative-offset-with-gravity.jpg'), data, done);
       });
   });
 
@@ -207,11 +260,29 @@ describe('composite', () => {
       });
   });
 
+  it('centre gravity should replicate correct number of tiles', async () => {
+    const red = { r: 255, g: 0, b: 0 };
+    const [r, g, b] = await sharp({
+      create: {
+        width: 40, height: 40, channels: 4, background: red
+      }
+    })
+      .composite([{
+        input: fixtures.inputPngWithTransparency16bit,
+        gravity: 'centre',
+        tile: true
+      }])
+      .raw()
+      .toBuffer();
+
+    assert.deepStrictEqual({ r, g, b }, red);
+  });
+
   it('cutout via dest-in', done => {
     sharp(fixtures.inputJpg)
       .resize(300, 300)
       .composite([{
-        input: Buffer.from('<svg><rect x="0" y="0" width="200" height="200" rx="50" ry="50"/></svg>'),
+        input: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect x="0" y="0" width="200" height="200" rx="50" ry="50"/></svg>'),
         density: 96,
         blend: 'dest-in',
         cutout: true
@@ -234,7 +305,7 @@ describe('composite', () => {
           .resize(80)
           .composite([{
             input: fixtures.inputPngWithTransparency16bit,
-            gravity: gravity
+            gravity
           }])
           .toBuffer((err, data, info) => {
             if (err) throw err;
@@ -279,7 +350,7 @@ describe('composite', () => {
           .composite([{
             input: fixtures.inputPngWithTransparency16bit,
             tile: true,
-            gravity: gravity
+            gravity
           }])
           .toBuffer((err, data, info) => {
             if (err) throw err;
@@ -333,13 +404,25 @@ describe('composite', () => {
     it('invalid left', () => {
       assert.throws(() => {
         sharp().composite([{ input: 'test', left: 0.5 }]);
-      }, /Expected positive integer for left but received 0.5 of type number/);
+      }, /Expected integer for left but received 0.5 of type number/);
+      assert.throws(() => {
+        sharp().composite([{ input: 'test', left: 'invalid' }]);
+      }, /Expected integer for left but received invalid of type string/);
+      assert.throws(() => {
+        sharp().composite([{ input: 'test', left: 'invalid', top: 10 }]);
+      }, /Expected integer for left but received invalid of type string/);
     });
 
     it('invalid top', () => {
       assert.throws(() => {
-        sharp().composite([{ input: 'test', top: -1 }]);
-      }, /Expected positive integer for top but received -1 of type number/);
+        sharp().composite([{ input: 'test', top: 0.5 }]);
+      }, /Expected integer for top but received 0.5 of type number/);
+      assert.throws(() => {
+        sharp().composite([{ input: 'test', top: 'invalid' }]);
+      }, /Expected integer for top but received invalid of type string/);
+      assert.throws(() => {
+        sharp().composite([{ input: 'test', top: 'invalid', left: 10 }]);
+      }, /Expected integer for top but received invalid of type string/);
     });
 
     it('left but no top', () => {
@@ -359,5 +442,94 @@ describe('composite', () => {
         sharp().composite([{ input: 'test', gravity: 'invalid' }]);
       }, /Expected valid gravity for gravity but received invalid of type string/);
     });
+  });
+
+  it('Allow offset beyond bottom/right edge', async () => {
+    const red = { r: 255, g: 0, b: 0 };
+    const blue = { r: 0, g: 0, b: 255 };
+
+    const [r, g, b] = await sharp({ create: { width: 2, height: 2, channels: 4, background: red } })
+      .composite([{
+        input: { create: { width: 2, height: 2, channels: 4, background: blue } },
+        top: 1,
+        left: 1
+      }])
+      .raw()
+      .toBuffer();
+
+    assert.deepStrictEqual(red, { r, g, b });
+  });
+
+  it('Ensure tiled composition works with resized fit=outside', async () => {
+    const { info } = await sharp({
+      create: {
+        width: 41, height: 41, channels: 3, background: 'red'
+      }
+    })
+      .resize({
+        width: 10,
+        height: 40,
+        fit: 'outside'
+      })
+      .composite([
+        {
+          input: {
+            create: {
+              width: 16, height: 16, channels: 3, background: 'green'
+            }
+          },
+          tile: true
+        }
+      ])
+      .toBuffer({ resolveWithObject: true });
+
+    assert.strictEqual(info.width, 40);
+    assert.strictEqual(info.height, 40);
+  });
+
+  it('Ensure implicit unpremultiply after resize but before composite', async () => {
+    const [r, g, b, a] = await sharp({
+      create: {
+        width: 1, height: 1, channels: 4, background: 'saddlebrown'
+      }
+    })
+      .resize({ width: 8 })
+      .composite([{
+        input: Buffer.from([255, 255, 255, 128]),
+        raw: { width: 1, height: 1, channels: 4 },
+        tile: true,
+        blend: 'dest-in'
+      }])
+      .raw()
+      .toBuffer();
+
+    assert.strictEqual(r, 139);
+    assert.strictEqual(g, 69);
+    assert.strictEqual(b, 19);
+    assert.strictEqual(a, 128);
+  });
+
+  it('Ensure tiled overlay is fully decoded', async () => {
+    const tile = await sharp({
+      create: {
+        width: 8, height: 513, channels: 3, background: 'red'
+      }
+    })
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+
+    const { info } = await sharp({
+      create: {
+        width: 8, height: 514, channels: 3, background: 'green'
+      }
+    })
+      .composite([{
+        input: tile,
+        tile: true
+      }])
+      .toBuffer({ resolveWithObject: true });
+
+    assert.strictEqual(info.width, 8);
+    assert.strictEqual(info.height, 514);
   });
 });

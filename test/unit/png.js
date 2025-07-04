@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const fs = require('fs');
@@ -19,7 +22,7 @@ describe('PNG', function () {
     });
   });
 
-  it('default compressionLevel generates smaller file than compressionLevel=6', function (done) {
+  it('default compressionLevel generates smaller file than compressionLevel=0', function (done) {
     // First generate with default compressionLevel
     sharp(fixtures.inputPng)
       .resize(320, 240)
@@ -31,7 +34,7 @@ describe('PNG', function () {
         // Then generate with compressionLevel=6
         sharp(fixtures.inputPng)
           .resize(320, 240)
-          .png({ compressionLevel: 6 })
+          .png({ compressionLevel: 0 })
           .toBuffer(function (err, largerData, largerInfo) {
             if (err) throw err;
             assert.strictEqual(true, largerData.length > 0);
@@ -112,6 +115,49 @@ describe('PNG', function () {
       });
   });
 
+  it('16-bit grey+alpha PNG roundtrip', async () => {
+    const after = await sharp(fixtures.inputPng16BitGreyAlpha)
+      .toColourspace('grey16')
+      .toBuffer();
+
+    const [alphaMeanBefore, alphaMeanAfter] = (
+      await Promise.all([
+        sharp(fixtures.inputPng16BitGreyAlpha).stats(),
+        sharp(after).stats()
+      ])
+    )
+      .map(stats => stats.channels[1].mean);
+
+    assert.strictEqual(alphaMeanAfter, alphaMeanBefore);
+  });
+
+  it('palette decode/encode roundtrip', async () => {
+    const data = await sharp(fixtures.inputPngPalette)
+      .png({ effort: 1, palette: true })
+      .toBuffer();
+
+    const { size, ...metadata } = await sharp(data).metadata();
+    assert.deepStrictEqual(metadata, {
+      autoOrient: {
+        height: 68,
+        width: 68
+      },
+      format: 'png',
+      width: 68,
+      height: 68,
+      space: 'srgb',
+      channels: 3,
+      density: 72,
+      depth: 'uchar',
+      isProgressive: false,
+      isPalette: true,
+      bitsPerSample: 8,
+      paletteBitDepth: 8,
+      hasProfile: false,
+      hasAlpha: false
+    });
+  });
+
   it('Valid PNG libimagequant palette value does not throw error', function () {
     assert.doesNotThrow(function () {
       sharp().png({ palette: false });
@@ -127,8 +173,8 @@ describe('PNG', function () {
   it('Valid PNG libimagequant quality value produces image of same size or smaller', function () {
     const inputPngBuffer = fs.readFileSync(fixtures.inputPng);
     return Promise.all([
-      sharp(inputPngBuffer).resize(10).png({ quality: 80 }).toBuffer(),
-      sharp(inputPngBuffer).resize(10).png({ quality: 100 }).toBuffer()
+      sharp(inputPngBuffer).resize(10).png({ effort: 1, quality: 80 }).toBuffer(),
+      sharp(inputPngBuffer).resize(10).png({ effort: 1, quality: 100 }).toBuffer()
     ]).then(function (data) {
       assert.strictEqual(true, data[0].length <= data[1].length);
     });
@@ -137,6 +183,12 @@ describe('PNG', function () {
   it('Invalid PNG libimagequant quality value throws error', function () {
     assert.throws(function () {
       sharp().png({ quality: 101 });
+    });
+  });
+
+  it('Invalid effort value throws error', () => {
+    assert.throws(() => {
+      sharp().png({ effort: 0.1 });
     });
   });
 
@@ -160,6 +212,25 @@ describe('PNG', function () {
     assert.throws(function () {
       sharp().png({ colors: 0.1 });
     });
+  });
+
+  it('Can set bitdepth of PNG without palette', async () => {
+    const data = await sharp({
+      create: {
+        width: 8, height: 8, channels: 3, background: 'red'
+      }
+    })
+      .toColourspace('b-w')
+      .png({ colours: 2, palette: false })
+      .toBuffer();
+
+    const { channels, isPalette, bitsPerSample, paletteBitDepth, size, space } = await sharp(data).metadata();
+    assert.strictEqual(channels, 1);
+    assert.strictEqual(isPalette, false);
+    assert.strictEqual(bitsPerSample, 1);
+    assert.strictEqual(paletteBitDepth, undefined);
+    assert.strictEqual(size, 89);
+    assert.strictEqual(space, 'b-w');
   });
 
   it('Valid PNG libimagequant dither value produces image of same size or smaller', function () {

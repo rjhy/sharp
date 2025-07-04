@@ -1,16 +1,5 @@
-// Copyright 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020 Lovell Fuller and contributors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <numeric>
 #include <vector>
@@ -41,7 +30,7 @@ class StatsWorker : public Napi::AsyncWorker {
 
   void Execute() {
     // Decrement queued task counter
-    g_atomic_int_dec_and_test(&sharp::counterQueue);
+    sharp::counterQueue--;
 
     vips::VImage image;
     sharp::ImageType imageType = sharp::ImageType::UNKNOWN;
@@ -69,14 +58,37 @@ class StatsWorker : public Napi::AsyncWorker {
           baton->channelStats.push_back(cStats);
         }
         // Image is not opaque when alpha layer is present and contains a non-mamixa value
-        if (sharp::HasAlpha(image)) {
+        if (image.has_alpha()) {
           double const minAlpha = static_cast<double>(stats.getpoint(STAT_MIN_INDEX, bands).front());
-          if (minAlpha != sharp::MaximumImageAlpha(image.interpretation())) {
+          if (minAlpha != vips_interpretation_max_alpha(image.interpretation())) {
             baton->isOpaque = false;
           }
         }
+        // Convert to greyscale
+        vips::VImage greyscale = image.colourspace(VIPS_INTERPRETATION_B_W)[0];
         // Estimate entropy via histogram of greyscale value frequency
-        baton->entropy = std::abs(image.colourspace(VIPS_INTERPRETATION_B_W)[0].hist_find().hist_entropy());
+        baton->entropy = std::abs(greyscale.hist_find().hist_entropy());
+        // Estimate sharpness via standard deviation of greyscale laplacian
+        if (image.width() > 1 || image.height() > 1) {
+          VImage laplacian = VImage::new_matrixv(3, 3,
+            0.0,  1.0, 0.0,
+            1.0, -4.0, 1.0,
+            0.0,  1.0, 0.0);
+          laplacian.set("scale", 9.0);
+          baton->sharpness = greyscale.conv(laplacian).deviate();
+        }
+        // Most dominant sRGB colour via 4096-bin 3D histogram
+        vips::VImage hist = sharp::RemoveAlpha(image)
+          .colourspace(VIPS_INTERPRETATION_sRGB)
+          .hist_find_ndim(VImage::option()->set("bins", 16));
+        std::complex<double> maxpos = hist.maxpos();
+        int const dx = static_cast<int>(std::real(maxpos));
+        int const dy = static_cast<int>(std::imag(maxpos));
+        std::vector<double> pel = hist(dx, dy);
+        int const dz = std::distance(pel.begin(), std::find(pel.begin(), pel.end(), hist.max()));
+        baton->dominantRed = dx * 16 + 8;
+        baton->dominantGreen = dy * 16 + 8;
+        baton->dominantBlue = dz * 16 + 8;
       } catch (vips::VError const &err) {
         (baton->err).append(err.what());
       }
@@ -94,7 +106,7 @@ class StatsWorker : public Napi::AsyncWorker {
     // Handle warnings
     std::string warning = sharp::VipsWarningPop();
     while (!warning.empty()) {
-      debuglog.Call({ Napi::String::New(env, warning) });
+      debuglog.Call(Receiver().Value(), { Napi::String::New(env, warning) });
       warning = sharp::VipsWarningPop();
     }
 
@@ -123,9 +135,15 @@ class StatsWorker : public Napi::AsyncWorker {
       info.Set("channels", channels);
       info.Set("isOpaque", baton->isOpaque);
       info.Set("entropy", baton->entropy);
-      Callback().MakeCallback(Receiver().Value(), { env.Null(), info });
+      info.Set("sharpness", baton->sharpness);
+      Napi::Object dominant = Napi::Object::New(env);
+      dominant.Set("r", baton->dominantRed);
+      dominant.Set("g", baton->dominantGreen);
+      dominant.Set("b", baton->dominantBlue);
+      info.Set("dominant", dominant);
+      Callback().Call(Receiver().Value(), { env.Null(), info });
     } else {
-      Callback().MakeCallback(Receiver().Value(), { Napi::Error::New(env, baton->err).Value() });
+      Callback().Call(Receiver().Value(), { Napi::Error::New(env, sharp::TrimEnd(baton->err)).Value() });
     }
 
     delete baton->input;
@@ -143,22 +161,23 @@ class StatsWorker : public Napi::AsyncWorker {
 Napi::Value stats(const Napi::CallbackInfo& info) {
   // V8 objects are converted to non-V8 types held in the baton struct
   StatsBaton *baton = new StatsBaton;
-  Napi::Object options = info[0].As<Napi::Object>();
+  Napi::Object options = info[size_t(0)].As<Napi::Object>();
 
   // Input
   baton->input = sharp::CreateInputDescriptor(options.Get("input").As<Napi::Object>());
+  baton->input->access = VIPS_ACCESS_RANDOM;
 
   // Function to notify of libvips warnings
   Napi::Function debuglog = options.Get("debuglog").As<Napi::Function>();
 
   // Join queue for worker thread
-  Napi::Function callback = info[1].As<Napi::Function>();
+  Napi::Function callback = info[size_t(1)].As<Napi::Function>();
   StatsWorker *worker = new StatsWorker(callback, baton, debuglog);
   worker->Receiver().Set("options", options);
   worker->Queue();
 
   // Increment queued task counter
-  g_atomic_int_inc(&sharp::counterQueue);
+  sharp::counterQueue++;
 
   return info.Env().Undefined();
 }

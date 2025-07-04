@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -12,8 +15,8 @@ const assertNormalized = function (data) {
     min = Math.min(min, data[i]);
     max = Math.max(max, data[i]);
   }
-  assert.strictEqual(0, min);
-  assert.strictEqual(255, max);
+  assert.strictEqual(0, min, 'min too high');
+  assert.ok(max > 248, 'max too low');
 };
 
 describe('Normalization', function () {
@@ -30,9 +33,8 @@ describe('Normalization', function () {
 
   it('spreads grayscaled image values between 0 and 255', function (done) {
     sharp(fixtures.inputJpgWithLowContrast)
-      .gamma()
       .greyscale()
-      .normalize(true)
+      .normalize()
       .raw()
       .toBuffer(function (err, data, info) {
         if (err) throw err;
@@ -54,6 +56,7 @@ describe('Normalization', function () {
 
   it('keeps an existing alpha channel', function (done) {
     sharp(fixtures.inputPngWithTransparency)
+      .resize(8, 8)
       .normalize()
       .toBuffer(function (err, data) {
         if (err) throw err;
@@ -69,6 +72,7 @@ describe('Normalization', function () {
 
   it('keeps the alpha channel of greyscale images intact', function (done) {
     sharp(fixtures.inputPngWithGreyAlpha)
+      .resize(8, 8)
       .normalise()
       .toBuffer(function (err, data) {
         if (err) throw err;
@@ -102,5 +106,59 @@ describe('Normalization', function () {
         assertNormalized(data);
         done();
       });
+  });
+
+  it('should handle luminance range', function (done) {
+    sharp(fixtures.inputJpgWithLowContrast)
+      .normalise({ lower: 10, upper: 70 })
+      .raw()
+      .toBuffer(function (err, data, info) {
+        if (err) throw err;
+        assertNormalized(data);
+        done();
+      });
+  });
+
+  it('should allow lower without upper', function () {
+    assert.doesNotThrow(() => sharp().normalize({ lower: 2 }));
+  });
+  it('should allow upper without lower', function () {
+    assert.doesNotThrow(() => sharp().normalize({ upper: 98 }));
+  });
+  it('should throw when lower is out of range', function () {
+    assert.throws(
+      () => sharp().normalise({ lower: -10 }),
+      /Expected number between 0 and 99 for lower but received -10 of type number/
+    );
+  });
+  it('should throw when upper is out of range', function () {
+    assert.throws(
+      () => sharp().normalise({ upper: 110 }),
+      /Expected number between 1 and 100 for upper but received 110 of type number/
+    );
+  });
+  it('should throw when lower is not a number', function () {
+    assert.throws(
+      () => sharp().normalise({ lower: 'fail' }),
+      /Expected number between 0 and 99 for lower but received fail of type string/
+    );
+  });
+  it('should throw when upper is not a number', function () {
+    assert.throws(
+      () => sharp().normalise({ upper: 'fail' }),
+      /Expected number between 1 and 100 for upper but received fail of type string/
+    );
+  });
+  it('should throw when the lower and upper are equal', function () {
+    assert.throws(
+      () => sharp().normalise({ lower: 2, upper: 2 }),
+      /Expected lower to be less than upper for range but received 2 >= 2/
+    );
+  });
+  it('should throw when the lower is greater than upper', function () {
+    assert.throws(
+      () => sharp().normalise({ lower: 3, upper: 2 }),
+      /Expected lower to be less than upper for range but received 3 >= 2/
+    );
   });
 });

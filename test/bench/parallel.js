@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 process.env.UV_THREADPOOL_SIZE = 64;
@@ -12,7 +15,6 @@ const width = 720;
 const height = 480;
 
 sharp.concurrency(1);
-sharp.simd(true);
 
 const timer = setInterval(function () {
   console.dir(sharp.counters());

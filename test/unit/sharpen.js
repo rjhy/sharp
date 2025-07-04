@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -43,6 +46,22 @@ describe('Sharpen', function () {
         assert.strictEqual(240, info.height);
         fixtures.assertSimilar(fixtures.expected('sharpen-5-2-4.jpg'), data, done);
       });
+  });
+
+  it('sigma=3.5, m1=2, m2=4', (done) => {
+    sharp(fixtures.inputJpg)
+      .resize(320, 240)
+      .sharpen({ sigma: 3.5, m1: 2, m2: 4 })
+      .toBuffer()
+      .then(data => fixtures.assertSimilar(fixtures.expected('sharpen-5-2-4.jpg'), data, done));
+  });
+
+  it('sigma=3.5, m1=2, m2=4, x1=2, y2=5, y3=25', (done) => {
+    sharp(fixtures.inputJpg)
+      .resize(320, 240)
+      .sharpen({ sigma: 3.5, m1: 2, m2: 4, x1: 2, y2: 5, y3: 25 })
+      .toBuffer()
+      .then(data => fixtures.assertSimilar(fixtures.expected('sharpen-5-2-4.jpg'), data, done));
   });
 
   if (!process.env.SHARP_TEST_WITHOUT_CACHE) {
@@ -91,6 +110,36 @@ describe('Sharpen', function () {
       sharp(fixtures.inputJpg).sharpen(1, 1, -1);
     });
   });
+
+  it('invalid options.sigma', () => assert.throws(
+    () => sharp().sharpen({ sigma: -1 }),
+    /Expected number between 0\.000001 and 10 for options\.sigma but received -1 of type number/
+  ));
+
+  it('invalid options.m1', () => assert.throws(
+    () => sharp().sharpen({ sigma: 1, m1: -1 }),
+    /Expected number between 0 and 1000000 for options\.m1 but received -1 of type number/
+  ));
+
+  it('invalid options.m2', () => assert.throws(
+    () => sharp().sharpen({ sigma: 1, m2: -1 }),
+    /Expected number between 0 and 1000000 for options\.m2 but received -1 of type number/
+  ));
+
+  it('invalid options.x1', () => assert.throws(
+    () => sharp().sharpen({ sigma: 1, x1: -1 }),
+    /Expected number between 0 and 1000000 for options\.x1 but received -1 of type number/
+  ));
+
+  it('invalid options.y2', () => assert.throws(
+    () => sharp().sharpen({ sigma: 1, y2: -1 }),
+    /Expected number between 0 and 1000000 for options\.y2 but received -1 of type number/
+  ));
+
+  it('invalid options.y3', () => assert.throws(
+    () => sharp().sharpen({ sigma: 1, y3: -1 }),
+    /Expected number between 0 and 1000000 for options\.y3 but received -1 of type number/
+  ));
 
   it('sharpened image is larger than non-sharpened', function (done) {
     sharp(fixtures.inputJpg)

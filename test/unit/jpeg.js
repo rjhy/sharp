@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -33,7 +36,7 @@ describe('JPEG', function () {
     [-1, 88.2, 'test'].forEach(function (quality) {
       it(quality.toString(), function () {
         assert.throws(function () {
-          sharp().jpeg({ quality: quality });
+          sharp().jpeg({ quality });
         });
       });
     });
@@ -289,5 +292,25 @@ describe('JPEG', function () {
             done();
           });
       });
+  });
+
+  it('Can use mozjpeg defaults', async () => {
+    const withoutData = await sharp(fixtures.inputJpg)
+      .resize(32, 24)
+      .jpeg({ mozjpeg: false })
+      .toBuffer();
+    const withoutMeta = await sharp(withoutData).metadata();
+    assert.strictEqual(false, withoutMeta.isProgressive);
+
+    const withData = await sharp(fixtures.inputJpg)
+      .resize(32, 24)
+      .jpeg({ mozjpeg: true })
+      .toBuffer();
+    const withMeta = await sharp(withData).metadata();
+    assert.strictEqual(true, withMeta.isProgressive);
+  });
+
+  it('Invalid mozjpeg value throws error', () => {
+    assert.throws(() => sharp().jpeg({ mozjpeg: 'fail' }));
   });
 });

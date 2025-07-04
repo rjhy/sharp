@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -5,15 +8,17 @@ const assert = require('assert');
 const sharp = require('../../');
 const fixtures = require('../fixtures');
 
+const sepia = [
+  [0.3588, 0.7044, 0.1368],
+  [0.299, 0.587, 0.114],
+  [0.2392, 0.4696, 0.0912]
+];
+
 describe('Recomb', function () {
   it('applies a sepia filter using recomb', function (done) {
     const output = fixtures.path('output.recomb-sepia.jpg');
     sharp(fixtures.inputJpgWithLandscapeExif1)
-      .recomb([
-        [0.3588, 0.7044, 0.1368],
-        [0.299, 0.587, 0.114],
-        [0.2392, 0.4696, 0.0912]
-      ])
+      .recomb(sepia)
       .toFile(output, function (err, info) {
         if (err) throw err;
         assert.strictEqual('jpeg', info.format);
@@ -31,11 +36,7 @@ describe('Recomb', function () {
   it('applies a sepia filter using recomb to an PNG with Alpha', function (done) {
     const output = fixtures.path('output.recomb-sepia.png');
     sharp(fixtures.inputPngAlphaPremultiplicationSmall)
-      .recomb([
-        [0.3588, 0.7044, 0.1368],
-        [0.299, 0.587, 0.114],
-        [0.2392, 0.4696, 0.0912]
-      ])
+      .recomb(sepia)
       .toFile(output, function (err, info) {
         if (err) throw err;
         assert.strictEqual('png', info.format);
@@ -48,6 +49,20 @@ describe('Recomb', function () {
         );
         done();
       });
+  });
+
+  it('recomb with a single channel input', async () => {
+    const { info } = await sharp(Buffer.alloc(64), {
+      raw: {
+        width: 8,
+        height: 8,
+        channels: 1
+      }
+    })
+      .recomb(sepia)
+      .toBuffer({ resolveWithObject: true });
+
+    assert.strictEqual(3, info.channels);
   });
 
   it('applies a different sepia filter using recomb', function (done) {
@@ -101,6 +116,29 @@ describe('Recomb', function () {
           output,
           fixtures.expected('Landscape_1-recomb-saturation.jpg'),
           37
+        );
+        done();
+      });
+  });
+
+  it('applies opacity 30% to the image', function (done) {
+    const output = fixtures.path('output.recomb-opacity.png');
+    sharp(fixtures.inputPngWithTransparent)
+      .recomb([
+        [1, 0, 0, 0],
+        [0, 1, 0, 0],
+        [0, 0, 1, 0],
+        [0, 0, 0, 0.3]
+      ])
+      .toFile(output, function (err, info) {
+        if (err) throw err;
+        assert.strictEqual('png', info.format);
+        assert.strictEqual(48, info.width);
+        assert.strictEqual(48, info.height);
+        fixtures.assertMaxColourDistance(
+          output,
+          fixtures.expected('d-opacity-30.png'),
+          17
         );
         done();
       });

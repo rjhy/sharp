@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -42,18 +45,15 @@ describe('Colour space conversion', function () {
       });
   });
 
-  if (sharp.format.tiff.input.file && sharp.format.webp.output.buffer) {
-    it('From 1-bit TIFF to sRGB WebP [slow]', function (done) {
-      sharp(fixtures.inputTiff)
-        .webp()
-        .toBuffer(function (err, data, info) {
-          if (err) throw err;
-          assert.strictEqual(true, data.length > 0);
-          assert.strictEqual('webp', info.format);
-          done();
-        });
-    });
-  }
+  it('From 1-bit TIFF to sRGB WebP', async () => {
+    const data = await sharp(fixtures.inputTiff)
+      .resize(8, 8)
+      .webp()
+      .toBuffer();
+
+    const { format } = await sharp(data).metadata();
+    assert.strictEqual(format, 'webp');
+  });
 
   it('From CMYK to sRGB', function (done) {
     sharp(fixtures.inputJpgWithCmykProfile)
@@ -93,7 +93,98 @@ describe('Colour space conversion', function () {
       });
   });
 
-  it('Invalid input', function () {
+  it('Profile-less CMYK roundtrip', async () => {
+    const [c, m, y, k] = await sharp(fixtures.inputJpgWithCmykNoProfile)
+      .pipelineColourspace('cmyk')
+      .toColourspace('cmyk')
+      .raw()
+      .toBuffer();
+
+    assert.deepStrictEqual(
+      { c, m, y, k },
+      { c: 55, m: 27, y: 0, k: 0 }
+    );
+  });
+
+  it('CMYK profile to CMYK profile conversion using perceptual intent', async () => {
+    const data = await sharp(fixtures.inputTiffFogra)
+      .resize(320, 240)
+      .toColourspace('cmyk')
+      .pipelineColourspace('cmyk')
+      .withIccProfile(fixtures.path('XCMYK 2017.icc'))
+      .raw()
+      .toBuffer();
+
+    const [c, m, y, k] = data;
+    assert.deepStrictEqual(
+      { c, m, y, k },
+      { c: 1, m: 239, y: 227, k: 5 }
+    );
+  });
+
+  it('CMYK profile to CMYK profile with negate', (done) => {
+    sharp(fixtures.inputTiffFogra)
+      .resize(320, 240)
+      .toColourspace('cmyk')
+      .pipelineColourspace('cmyk')
+      .withIccProfile(fixtures.path('XCMYK 2017.icc'))
+      .negate()
+      .toBuffer(function (err, data, info) {
+        if (err) throw err;
+        assert.strictEqual('tiff', info.format);
+        assert.strictEqual(320, info.width);
+        assert.strictEqual(240, info.height);
+        fixtures.assertSimilar(
+          fixtures.expected('colourspace.cmyk-to-cmyk-negated.tif'),
+          data,
+          { threshold: 0 },
+          done
+        );
+      });
+  });
+
+  it('From sRGB with RGB16 pipeline, resize with gamma, to sRGB', function (done) {
+    sharp(fixtures.inputPngGradients)
+      .pipelineColourspace('rgb16')
+      .resize(320)
+      .gamma()
+      .toColourspace('srgb')
+      .toBuffer(function (err, data, info) {
+        if (err) throw err;
+        assert.strictEqual(320, info.width);
+        fixtures.assertSimilar(fixtures.expected('colourspace-gradients-gamma-resize.png'), data, {
+          threshold: 0
+        }, done);
+      });
+  });
+
+  it('Convert P3 to sRGB', async () => {
+    const [r, g, b] = await sharp(fixtures.inputPngP3)
+      .raw()
+      .toBuffer();
+    assert.strictEqual(r, 255);
+    assert.strictEqual(g, 0);
+    assert.strictEqual(b, 0);
+  });
+
+  it('Passthrough P3', async () => {
+    const [r, g, b] = await sharp(fixtures.inputPngP3)
+      .withMetadata({ icc: 'p3' })
+      .raw()
+      .toBuffer();
+    assert.strictEqual(r, 234);
+    assert.strictEqual(g, 51);
+    assert.strictEqual(b, 34);
+  });
+
+  it('Invalid pipelineColourspace input', function () {
+    assert.throws(function () {
+      sharp(fixtures.inputJpg)
+        .pipelineColorspace(null);
+    }, /Expected string for colourspace but received null of type object/);
+  });
+
+  it('Invalid toColourspace input', function () {
     assert.throws(function () {
       sharp(fixtures.inputJpg)
         .toColourspace(null);

@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -7,22 +10,6 @@ const inRange = require('../../lib/is').inRange;
 const fixtures = require('../fixtures');
 
 describe('Trim borders', function () {
-  it('Threshold default', function (done) {
-    const expected = fixtures.expected('alpha-layer-1-fill-trim-resize.png');
-    sharp(fixtures.inputPngOverlayLayer1)
-      .resize(450, 322)
-      .trim()
-      .toBuffer(function (err, data, info) {
-        if (err) throw err;
-        assert.strictEqual('png', info.format);
-        assert.strictEqual(450, info.width);
-        assert.strictEqual(322, info.height);
-        assert.strictEqual(-204, info.trimOffsetLeft);
-        assert.strictEqual(0, info.trimOffsetTop);
-        fixtures.assertSimilar(expected, data, done);
-      });
-  });
-
   it('Skip shrink-on-load', function (done) {
     const expected = fixtures.expected('alpha-layer-2-trim-resize.jpg');
     sharp(fixtures.inputJpgOverlayLayer2)
@@ -41,7 +28,7 @@ describe('Trim borders', function () {
       });
   });
 
-  it('single colour PNG where alpha channel provides the image', () =>
+  it('Single colour PNG where alpha channel provides the image', () =>
     sharp(fixtures.inputPngImageInAlpha)
       .trim()
       .toBuffer({ resolveWithObject: true })
@@ -59,7 +46,9 @@ describe('Trim borders', function () {
   it('16-bit PNG with alpha channel', function (done) {
     sharp(fixtures.inputPngWithTransparency16bit)
       .resize(32, 32)
-      .trim(20)
+      .trim({
+        threshold: 20
+      })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(true, data.length > 0);
@@ -94,7 +83,7 @@ describe('Trim borders', function () {
       .catch(done);
   });
 
-  it('should rotate before trim', () =>
+  it('Should rotate before trim', () =>
     sharp({
       create: {
         width: 20,
@@ -109,7 +98,9 @@ describe('Trim borders', function () {
       .then(rotated30 =>
         sharp(rotated30)
           .rotate(-30)
-          .trim(128)
+          .trim({
+            threshold: 128
+          })
           .toBuffer({ resolveWithObject: true })
           .then(({ info }) => {
             assert.strictEqual(20, info.width);
@@ -120,13 +111,181 @@ describe('Trim borders', function () {
       )
   );
 
-  describe('Invalid thresholds', function () {
-    [-1, 'fail', {}].forEach(function (threshold) {
-      it(JSON.stringify(threshold), function () {
+  it('Animated image rejects', () =>
+    assert.rejects(() => sharp(fixtures.inputGifAnimated, { animated: true })
+      .trim()
+      .toBuffer(),
+    /Trim is not supported for multi-page images/
+    )
+  );
+
+  it('Ensure trim uses bounding box of alpha and non-alpha channels', async () => {
+    const { info } = await sharp(fixtures.inputPngTrimIncludeAlpha)
+      .trim()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+    assert.strictEqual(width, 179);
+    assert.strictEqual(height, 123);
+    assert.strictEqual(trimOffsetTop, -44);
+    assert.strictEqual(trimOffsetLeft, -13);
+  });
+
+  it('Ensure greyscale image can be trimmed', async () => {
+    const greyscale = await sharp({
+      create: {
+        width: 16,
+        height: 8,
+        channels: 3,
+        background: 'silver'
+      }
+    })
+      .extend({ left: 12, right: 24, background: 'gray' })
+      .toColourspace('b-w')
+      .png({ compressionLevel: 0 })
+      .toBuffer();
+
+    const { info } = await sharp(greyscale)
+      .trim()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+    assert.strictEqual(width, 16);
+    assert.strictEqual(height, 8);
+    assert.strictEqual(trimOffsetTop, 0);
+    assert.strictEqual(trimOffsetLeft, -12);
+  });
+
+  it('Ensure CMYK image can be trimmed', async () => {
+    const cmyk = await sharp({
+      create: {
+        width: 16,
+        height: 8,
+        channels: 3,
+        background: 'red'
+      }
+    })
+      .extend({ left: 12, right: 24, background: 'blue' })
+      .toColourspace('cmyk')
+      .jpeg()
+      .toBuffer();
+
+    const { info } = await sharp(cmyk)
+      .trim()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+    assert.strictEqual(width, 16);
+    assert.strictEqual(height, 8);
+    assert.strictEqual(trimOffsetTop, 0);
+    assert.strictEqual(trimOffsetLeft, -12);
+  });
+
+  it('Ensure trim of image with all pixels same is no-op', async () => {
+    const { info } = await sharp({
+      create: {
+        width: 5,
+        height: 5,
+        channels: 3,
+        background: 'red'
+      }
+    })
+      .trim()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+    assert.strictEqual(width, 5);
+    assert.strictEqual(height, 5);
+    assert.strictEqual(trimOffsetTop, 0);
+    assert.strictEqual(trimOffsetLeft, 0);
+  });
+
+  it('Works with line-art', async () => {
+    const { info } = await sharp(fixtures.inputJpgOverlayLayer2)
+      .trim({ lineArt: true })
+      .toBuffer({ resolveWithObject: true });
+
+    assert.strictEqual(info.trimOffsetTop, -552);
+  });
+
+  describe('Invalid parameters', function () {
+    Object.entries({
+      'Invalid string': 'fail',
+      'Invalid background option': {
+        background: 'fail'
+      },
+      'Negative threshold option': {
+        threshold: -1
+      },
+      'Invalid lineArt': {
+        lineArt: 'fail'
+      }
+    }).forEach(function ([description, parameter]) {
+      it(description, function () {
         assert.throws(function () {
-          sharp().trim(threshold);
+          sharp().trim(parameter);
         });
       });
+    });
+  });
+
+  describe('Specific background colour', function () {
+    it('Doesn\'t trim at all', async () => {
+      const { info } = await sharp(fixtures.inputPngTrimSpecificColour)
+        .trim({
+          background: 'yellow'
+        })
+        .toBuffer({ resolveWithObject: true });
+
+      const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+      assert.strictEqual(width, 900);
+      assert.strictEqual(height, 600);
+      assert.strictEqual(trimOffsetTop, 0);
+      assert.strictEqual(trimOffsetLeft, 0);
+    });
+
+    it('Only trims the bottom', async () => {
+      const { info } = await sharp(fixtures.inputPngTrimSpecificColour)
+        .trim({
+          background: '#21468B'
+        })
+        .toBuffer({ resolveWithObject: true });
+
+      const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+      assert.strictEqual(width, 900);
+      assert.strictEqual(height, 401);
+      assert.strictEqual(trimOffsetTop, 0);
+      assert.strictEqual(trimOffsetLeft, 0);
+    });
+
+    it('Only trims the bottom, in 16-bit', async () => {
+      const { info } = await sharp(fixtures.inputPngTrimSpecificColour16bit)
+        .trim({
+          background: '#21468B'
+        })
+        .toBuffer({ resolveWithObject: true });
+
+      const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+      assert.strictEqual(width, 900);
+      assert.strictEqual(height, 401);
+      assert.strictEqual(trimOffsetTop, 0);
+      assert.strictEqual(trimOffsetLeft, 0);
+    });
+
+    it('Only trims the bottom, including alpha', async () => {
+      const { info } = await sharp(fixtures.inputPngTrimSpecificColourIncludeAlpha)
+        .trim({
+          background: '#21468B80'
+        })
+        .toBuffer({ resolveWithObject: true });
+
+      const { width, height, trimOffsetTop, trimOffsetLeft } = info;
+      assert.strictEqual(width, 900);
+      assert.strictEqual(height, 401);
+      assert.strictEqual(trimOffsetTop, 0);
+      assert.strictEqual(trimOffsetLeft, 0);
     });
   });
 });

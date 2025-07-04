@@ -1,22 +1,12 @@
-// Copyright 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020 Lovell Fuller and contributors.
-//
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-//     http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <cstdlib>
 #include <string>
 #include <string.h>
 #include <vector>
 #include <queue>
+#include <map>
 #include <mutex>  // NOLINT(build/c++11)
 
 #include <napi.h>
@@ -35,11 +25,20 @@ namespace sharp {
   std::string AttrAsStr(Napi::Object obj, std::string attr) {
     return obj.Get(attr).As<Napi::String>();
   }
+  std::string AttrAsStr(Napi::Object obj, unsigned int const attr) {
+    return obj.Get(attr).As<Napi::String>();
+  }
   uint32_t AttrAsUint32(Napi::Object obj, std::string attr) {
     return obj.Get(attr).As<Napi::Number>().Uint32Value();
   }
   int32_t AttrAsInt32(Napi::Object obj, std::string attr) {
     return obj.Get(attr).As<Napi::Number>().Int32Value();
+  }
+  int32_t AttrAsInt32(Napi::Object obj, unsigned int const attr) {
+    return obj.Get(attr).As<Napi::Number>().Int32Value();
+  }
+  int64_t AttrAsInt64(Napi::Object obj, std::string attr) {
+    return obj.Get(attr).As<Napi::Number>().Int64Value();
   }
   double AttrAsDouble(Napi::Object obj, std::string attr) {
     return obj.Get(attr).As<Napi::Number>().DoubleValue();
@@ -50,13 +49,21 @@ namespace sharp {
   bool AttrAsBool(Napi::Object obj, std::string attr) {
     return obj.Get(attr).As<Napi::Boolean>().Value();
   }
-  std::vector<double> AttrAsRgba(Napi::Object obj, std::string attr) {
-    Napi::Array background = obj.Get(attr).As<Napi::Array>();
-    std::vector<double> rgba(background.Length());
-    for (unsigned int i = 0; i < background.Length(); i++) {
-      rgba[i] = AttrAsDouble(background, i);
+  std::vector<double> AttrAsVectorOfDouble(Napi::Object obj, std::string attr) {
+    Napi::Array napiArray = obj.Get(attr).As<Napi::Array>();
+    std::vector<double> vectorOfDouble(napiArray.Length());
+    for (unsigned int i = 0; i < napiArray.Length(); i++) {
+      vectorOfDouble[i] = AttrAsDouble(napiArray, i);
     }
-    return rgba;
+    return vectorOfDouble;
+  }
+  std::vector<int32_t> AttrAsInt32Vector(Napi::Object obj, std::string attr) {
+    Napi::Array array = obj.Get(attr).As<Napi::Array>();
+    std::vector<int32_t> vector(array.Length());
+    for (unsigned int i = 0; i < array.Length(); i++) {
+      vector[i] = AttrAsInt32(array, i);
+    }
+    return vector;
   }
 
   // Create an InputDescriptor instance from a Napi::Object describing an input image
@@ -68,18 +75,25 @@ namespace sharp {
       Napi::Buffer<char> buffer = input.Get("buffer").As<Napi::Buffer<char>>();
       descriptor->bufferLength = buffer.Length();
       descriptor->buffer = buffer.Data();
-      descriptor->isBuffer = TRUE;
+      descriptor->isBuffer = true;
     }
-    descriptor->failOnError = AttrAsBool(input, "failOnError");
+    descriptor->failOn = AttrAsEnum<VipsFailOn>(input, "failOn", VIPS_TYPE_FAIL_ON);
     // Density for vector-based input
     if (HasAttr(input, "density")) {
       descriptor->density = AttrAsDouble(input, "density");
     }
+    // Should we ignore any embedded ICC profile
+    if (HasAttr(input, "ignoreIcc")) {
+      descriptor->ignoreIcc = AttrAsBool(input, "ignoreIcc");
+    }
     // Raw pixel input
     if (HasAttr(input, "rawChannels")) {
+      descriptor->rawDepth = AttrAsEnum<VipsBandFormat>(input, "rawDepth", VIPS_TYPE_BAND_FORMAT);
       descriptor->rawChannels = AttrAsUint32(input, "rawChannels");
       descriptor->rawWidth = AttrAsUint32(input, "rawWidth");
       descriptor->rawHeight = AttrAsUint32(input, "rawHeight");
+      descriptor->rawPremultiplied = AttrAsBool(input, "rawPremultiplied");
+      descriptor->rawPageHeight = AttrAsUint32(input, "rawPageHeight");
     }
     // Multi-page input (GIF, TIFF, PDF)
     if (HasAttr(input, "pages")) {
@@ -88,29 +102,113 @@ namespace sharp {
     if (HasAttr(input, "page")) {
       descriptor->page = AttrAsUint32(input, "page");
     }
+    // SVG
+    if (HasAttr(input, "svgStylesheet")) {
+      descriptor->svgStylesheet = AttrAsStr(input, "svgStylesheet");
+    }
+    if (HasAttr(input, "svgHighBitdepth")) {
+      descriptor->svgHighBitdepth = AttrAsBool(input, "svgHighBitdepth");
+    }
     // Multi-level input (OpenSlide)
-    if (HasAttr(input, "level")) {
-      descriptor->level = AttrAsUint32(input, "level");
+    if (HasAttr(input, "openSlideLevel")) {
+      descriptor->openSlideLevel = AttrAsUint32(input, "openSlideLevel");
+    }
+    // subIFD (OME-TIFF)
+    if (HasAttr(input, "subifd")) {
+      descriptor->tiffSubifd = AttrAsInt32(input, "tiffSubifd");
+    }
+    // // PDF background color
+    if (HasAttr(input, "pdfBackground")) {
+      descriptor->pdfBackground = AttrAsVectorOfDouble(input, "pdfBackground");
+    }
+    // Use JPEG 2000 oneshot mode?
+    if (HasAttr(input, "jp2Oneshot")) {
+      descriptor->jp2Oneshot = AttrAsBool(input, "jp2Oneshot");
     }
     // Create new image
     if (HasAttr(input, "createChannels")) {
       descriptor->createChannels = AttrAsUint32(input, "createChannels");
       descriptor->createWidth = AttrAsUint32(input, "createWidth");
       descriptor->createHeight = AttrAsUint32(input, "createHeight");
-      descriptor->createBackground = AttrAsRgba(input, "createBackground");
+      descriptor->createPageHeight = AttrAsUint32(input, "createPageHeight");
+      if (HasAttr(input, "createNoiseType")) {
+        descriptor->createNoiseType = AttrAsStr(input, "createNoiseType");
+        descriptor->createNoiseMean = AttrAsDouble(input, "createNoiseMean");
+        descriptor->createNoiseSigma = AttrAsDouble(input, "createNoiseSigma");
+      } else {
+        descriptor->createBackground = AttrAsVectorOfDouble(input, "createBackground");
+      }
+    }
+    // Create new image with text
+    if (HasAttr(input, "textValue")) {
+      descriptor->textValue = AttrAsStr(input, "textValue");
+      if (HasAttr(input, "textFont")) {
+        descriptor->textFont = AttrAsStr(input, "textFont");
+      }
+      if (HasAttr(input, "textFontfile")) {
+        descriptor->textFontfile = AttrAsStr(input, "textFontfile");
+      }
+      if (HasAttr(input, "textWidth")) {
+        descriptor->textWidth = AttrAsUint32(input, "textWidth");
+      }
+      if (HasAttr(input, "textHeight")) {
+        descriptor->textHeight = AttrAsUint32(input, "textHeight");
+      }
+      if (HasAttr(input, "textAlign")) {
+        descriptor->textAlign = AttrAsEnum<VipsAlign>(input, "textAlign", VIPS_TYPE_ALIGN);
+      }
+      if (HasAttr(input, "textJustify")) {
+        descriptor->textJustify = AttrAsBool(input, "textJustify");
+      }
+      if (HasAttr(input, "textDpi")) {
+        descriptor->textDpi = AttrAsUint32(input, "textDpi");
+      }
+      if (HasAttr(input, "textRgba")) {
+        descriptor->textRgba = AttrAsBool(input, "textRgba");
+      }
+      if (HasAttr(input, "textSpacing")) {
+        descriptor->textSpacing = AttrAsUint32(input, "textSpacing");
+      }
+      if (HasAttr(input, "textWrap")) {
+        descriptor->textWrap = AttrAsEnum<VipsTextWrap>(input, "textWrap", VIPS_TYPE_TEXT_WRAP);
+      }
+    }
+    // Join images together
+    if (HasAttr(input, "joinAnimated")) {
+      descriptor->joinAnimated = AttrAsBool(input, "joinAnimated");
+    }
+    if (HasAttr(input, "joinAcross")) {
+      descriptor->joinAcross = AttrAsUint32(input, "joinAcross");
+    }
+    if (HasAttr(input, "joinShim")) {
+      descriptor->joinShim = AttrAsUint32(input, "joinShim");
+    }
+    if (HasAttr(input, "joinBackground")) {
+      descriptor->joinBackground = AttrAsVectorOfDouble(input, "joinBackground");
+    }
+    if (HasAttr(input, "joinHalign")) {
+      descriptor->joinHalign = AttrAsEnum<VipsAlign>(input, "joinHalign", VIPS_TYPE_ALIGN);
+    }
+    if (HasAttr(input, "joinValign")) {
+      descriptor->joinValign = AttrAsEnum<VipsAlign>(input, "joinValign", VIPS_TYPE_ALIGN);
     }
     // Limit input images to a given number of pixels, where pixels = width * height
-    descriptor->limitInputPixels = AttrAsUint32(input, "limitInputPixels");
-    // Allow switch from random to sequential access
-    descriptor->access = AttrAsBool(input, "sequentialRead") ? VIPS_ACCESS_SEQUENTIAL : VIPS_ACCESS_RANDOM;
+    descriptor->limitInputPixels = static_cast<uint64_t>(AttrAsInt64(input, "limitInputPixels"));
+    if (HasAttr(input, "access")) {
+      descriptor->access = AttrAsBool(input, "sequentialRead") ? VIPS_ACCESS_SEQUENTIAL : VIPS_ACCESS_RANDOM;
+    }
+    // Remove safety features and allow unlimited input
+    descriptor->unlimited = AttrAsBool(input, "unlimited");
+    // Use the EXIF orientation to auto orient the image
+    descriptor->autoOrient = AttrAsBool(input, "autoOrient");
     return descriptor;
   }
 
   // How many tasks are in the queue?
-  volatile int counterQueue = 0;
+  std::atomic<int> counterQueue{0};
 
   // How many tasks are being processed?
-  volatile int counterProcess = 0;
+  std::atomic<int> counterProcess{0};
 
   // Filename extension checkers
   static bool EndsWith(std::string const &str, std::string const &end) {
@@ -125,6 +223,13 @@ namespace sharp {
   bool IsWebp(std::string const &str) {
     return EndsWith(str, ".webp") || EndsWith(str, ".WEBP");
   }
+  bool IsGif(std::string const &str) {
+    return EndsWith(str, ".gif") || EndsWith(str, ".GIF");
+  }
+  bool IsJp2(std::string const &str) {
+    return EndsWith(str, ".jp2") || EndsWith(str, ".jpx") || EndsWith(str, ".j2k") || EndsWith(str, ".j2c")
+      || EndsWith(str, ".JP2") || EndsWith(str, ".JPX") || EndsWith(str, ".J2K") || EndsWith(str, ".J2C");
+  }
   bool IsTiff(std::string const &str) {
     return EndsWith(str, ".tif") || EndsWith(str, ".tiff") || EndsWith(str, ".TIF") || EndsWith(str, ".TIFF");
   }
@@ -137,6 +242,9 @@ namespace sharp {
   bool IsAvif(std::string const &str) {
     return EndsWith(str, ".avif") || EndsWith(str, ".AVIF");
   }
+  bool IsJxl(std::string const &str) {
+    return EndsWith(str, ".jxl") || EndsWith(str, ".JXL");
+  }
   bool IsDz(std::string const &str) {
     return EndsWith(str, ".dzi") || EndsWith(str, ".DZI");
   }
@@ -145,6 +253,13 @@ namespace sharp {
   }
   bool IsV(std::string const &str) {
     return EndsWith(str, ".v") || EndsWith(str, ".V") || EndsWith(str, ".vips") || EndsWith(str, ".VIPS");
+  }
+
+  /*
+    Trim space from end of string.
+  */
+  std::string TrimEnd(std::string const &str) {
+    return str.substr(0, str.find_last_not_of(" \n\r\f") + 1);
   }
 
   /*
@@ -158,6 +273,7 @@ namespace sharp {
       case ImageType::WEBP: id = "webp"; break;
       case ImageType::TIFF: id = "tiff"; break;
       case ImageType::GIF: id = "gif"; break;
+      case ImageType::JP2: id = "jp2"; break;
       case ImageType::SVG: id = "svg"; break;
       case ImageType::HEIF: id = "heif"; break;
       case ImageType::PDF: id = "pdf"; break;
@@ -165,6 +281,10 @@ namespace sharp {
       case ImageType::OPENSLIDE: id = "openslide"; break;
       case ImageType::PPM: id = "ppm"; break;
       case ImageType::FITS: id = "fits"; break;
+      case ImageType::EXR: id = "exr"; break;
+      case ImageType::JXL: id = "jxl"; break;
+      case ImageType::RAD: id = "rad"; break;
+      case ImageType::DCRAW: id = "dcraw"; break;
       case ImageType::VIPS: id = "vips"; break;
       case ImageType::RAW: id = "raw"; break;
       case ImageType::UNKNOWN: id = "unknown"; break;
@@ -173,32 +293,63 @@ namespace sharp {
     return id;
   }
 
+  /**
+   * Regenerate this table with something like:
+   *
+   * $ vips -l foreign | grep -i load | awk '{ print $2, $1; }'
+   *
+   * Plus a bit of editing.
+   */
+  std::map<std::string, ImageType> loaderToType = {
+    { "VipsForeignLoadJpegFile", ImageType::JPEG },
+    { "VipsForeignLoadJpegBuffer", ImageType::JPEG },
+    { "VipsForeignLoadPngFile", ImageType::PNG },
+    { "VipsForeignLoadPngBuffer", ImageType::PNG },
+    { "VipsForeignLoadWebpFile", ImageType::WEBP },
+    { "VipsForeignLoadWebpBuffer", ImageType::WEBP },
+    { "VipsForeignLoadTiffFile", ImageType::TIFF },
+    { "VipsForeignLoadTiffBuffer", ImageType::TIFF },
+    { "VipsForeignLoadGifFile", ImageType::GIF },
+    { "VipsForeignLoadGifBuffer", ImageType::GIF },
+    { "VipsForeignLoadNsgifFile", ImageType::GIF },
+    { "VipsForeignLoadNsgifBuffer", ImageType::GIF },
+    { "VipsForeignLoadJp2kBuffer", ImageType::JP2 },
+    { "VipsForeignLoadJp2kFile", ImageType::JP2 },
+    { "VipsForeignLoadSvgFile", ImageType::SVG },
+    { "VipsForeignLoadSvgBuffer", ImageType::SVG },
+    { "VipsForeignLoadHeifFile", ImageType::HEIF },
+    { "VipsForeignLoadHeifBuffer", ImageType::HEIF },
+    { "VipsForeignLoadPdfFile", ImageType::PDF },
+    { "VipsForeignLoadPdfBuffer", ImageType::PDF },
+    { "VipsForeignLoadMagickFile", ImageType::MAGICK },
+    { "VipsForeignLoadMagickBuffer", ImageType::MAGICK },
+    { "VipsForeignLoadMagick7File", ImageType::MAGICK },
+    { "VipsForeignLoadMagick7Buffer", ImageType::MAGICK },
+    { "VipsForeignLoadOpenslideFile", ImageType::OPENSLIDE },
+    { "VipsForeignLoadPpmFile", ImageType::PPM },
+    { "VipsForeignLoadFitsFile", ImageType::FITS },
+    { "VipsForeignLoadOpenexr", ImageType::EXR },
+    { "VipsForeignLoadJxlFile", ImageType::JXL },
+    { "VipsForeignLoadJxlBuffer", ImageType::JXL },
+    { "VipsForeignLoadRadFile", ImageType::RAD },
+    { "VipsForeignLoadRadBuffer", ImageType::RAD },
+    { "VipsForeignLoadDcRawFile", ImageType::DCRAW },
+    { "VipsForeignLoadDcRawBuffer", ImageType::DCRAW },
+    { "VipsForeignLoadVips", ImageType::VIPS },
+    { "VipsForeignLoadVipsFile", ImageType::VIPS },
+    { "VipsForeignLoadRaw", ImageType::RAW }
+  };
+
   /*
     Determine image format of a buffer.
   */
   ImageType DetermineImageType(void *buffer, size_t const length) {
     ImageType imageType = ImageType::UNKNOWN;
     char const *load = vips_foreign_find_load_buffer(buffer, length);
-    if (load != NULL) {
-      std::string const loader = load;
-      if (EndsWith(loader, "JpegBuffer")) {
-        imageType = ImageType::JPEG;
-      } else if (EndsWith(loader, "PngBuffer")) {
-        imageType = ImageType::PNG;
-      } else if (EndsWith(loader, "WebpBuffer")) {
-        imageType = ImageType::WEBP;
-      } else if (EndsWith(loader, "TiffBuffer")) {
-        imageType = ImageType::TIFF;
-      } else if (EndsWith(loader, "GifBuffer")) {
-        imageType = ImageType::GIF;
-      } else if (EndsWith(loader, "SvgBuffer")) {
-        imageType = ImageType::SVG;
-      } else if (EndsWith(loader, "HeifBuffer")) {
-        imageType = ImageType::HEIF;
-      } else if (EndsWith(loader, "PdfBuffer")) {
-        imageType = ImageType::PDF;
-      } else if (EndsWith(loader, "MagickBuffer")) {
-        imageType = ImageType::MAGICK;
+    if (load != nullptr) {
+      auto it = loaderToType.find(load);
+      if (it != loaderToType.end()) {
+        imageType = it->second;
       }
     }
     return imageType;
@@ -211,36 +362,12 @@ namespace sharp {
     ImageType imageType = ImageType::UNKNOWN;
     char const *load = vips_foreign_find_load(file);
     if (load != nullptr) {
-      std::string const loader = load;
-      if (EndsWith(loader, "JpegFile")) {
-        imageType = ImageType::JPEG;
-      } else if (EndsWith(loader, "PngFile")) {
-        imageType = ImageType::PNG;
-      } else if (EndsWith(loader, "WebpFile")) {
-        imageType = ImageType::WEBP;
-      } else if (EndsWith(loader, "Openslide")) {
-        imageType = ImageType::OPENSLIDE;
-      } else if (EndsWith(loader, "TiffFile")) {
-        imageType = ImageType::TIFF;
-      } else if (EndsWith(loader, "GifFile")) {
-        imageType = ImageType::GIF;
-      } else if (EndsWith(loader, "SvgFile")) {
-        imageType = ImageType::SVG;
-      } else if (EndsWith(loader, "HeifFile")) {
-        imageType = ImageType::HEIF;
-      } else if (EndsWith(loader, "PdfFile")) {
-        imageType = ImageType::PDF;
-      } else if (EndsWith(loader, "Ppm")) {
-        imageType = ImageType::PPM;
-      } else if (EndsWith(loader, "Fits")) {
-        imageType = ImageType::FITS;
-      } else if (EndsWith(loader, "Vips")) {
-        imageType = ImageType::VIPS;
-      } else if (EndsWith(loader, "Magick") || EndsWith(loader, "MagickFile")) {
-        imageType = ImageType::MAGICK;
+      auto it = loaderToType.find(load);
+      if (it != loaderToType.end()) {
+        imageType = it->second;
       }
     } else {
-      if (EndsWith(vips::VError().what(), " not found\n")) {
+      if (EndsWith(vips::VError().what(), " does not exist\n")) {
         imageType = ImageType::MISSING;
       }
     }
@@ -252,10 +379,66 @@ namespace sharp {
   */
   bool ImageTypeSupportsPage(ImageType imageType) {
     return
+      imageType == ImageType::WEBP ||
+      imageType == ImageType::MAGICK ||
       imageType == ImageType::GIF ||
+      imageType == ImageType::JP2 ||
       imageType == ImageType::TIFF ||
       imageType == ImageType::HEIF ||
       imageType == ImageType::PDF;
+  }
+
+  /*
+    Does this image type support removal of safety limits?
+  */
+  bool ImageTypeSupportsUnlimited(ImageType imageType) {
+    return
+      imageType == ImageType::JPEG ||
+      imageType == ImageType::PNG ||
+      imageType == ImageType::SVG ||
+      imageType == ImageType::HEIF;
+  }
+
+  /*
+    Format-specific options builder
+  */
+  vips::VOption* GetOptionsForImageType(ImageType imageType, InputDescriptor *descriptor) {
+    vips::VOption *option = VImage::option()
+      ->set("access", descriptor->access)
+      ->set("fail_on", descriptor->failOn);
+    if (descriptor->unlimited && ImageTypeSupportsUnlimited(imageType)) {
+      option->set("unlimited", true);
+    }
+    if (ImageTypeSupportsPage(imageType)) {
+      option->set("n", descriptor->pages);
+      option->set("page", descriptor->page);
+    }
+    switch (imageType) {
+      case ImageType::SVG:
+        option->set("dpi", descriptor->density)
+              ->set("stylesheet", descriptor->svgStylesheet.data())
+              ->set("high_bitdepth", descriptor->svgHighBitdepth);
+        break;
+      case ImageType::TIFF:
+        option->set("tiffSubifd", descriptor->tiffSubifd);
+        break;
+      case ImageType::PDF:
+        option->set("dpi", descriptor->density)
+              ->set("background", descriptor->pdfBackground);
+        break;
+      case ImageType::OPENSLIDE:
+        option->set("openSlideLevel", descriptor->openSlideLevel);
+        break;
+      case ImageType::JP2:
+        option->set("oneshot", descriptor->jp2Oneshot);
+        break;
+      case ImageType::MAGICK:
+        option->set("density", std::to_string(descriptor->density).data());
+        break;
+      default:
+        break;
+    }
+    return option;
   }
 
   /*
@@ -267,12 +450,20 @@ namespace sharp {
     if (descriptor->isBuffer) {
       if (descriptor->rawChannels > 0) {
         // Raw, uncompressed pixel data
+        bool const is8bit = vips_band_format_is8bit(descriptor->rawDepth);
         image = VImage::new_from_memory(descriptor->buffer, descriptor->bufferLength,
-          descriptor->rawWidth, descriptor->rawHeight, descriptor->rawChannels, VIPS_FORMAT_UCHAR);
+          descriptor->rawWidth, descriptor->rawHeight, descriptor->rawChannels, descriptor->rawDepth);
         if (descriptor->rawChannels < 3) {
-          image.get_image()->Type = VIPS_INTERPRETATION_B_W;
+          image.get_image()->Type = is8bit ? VIPS_INTERPRETATION_B_W : VIPS_INTERPRETATION_GREY16;
         } else {
-          image.get_image()->Type = VIPS_INTERPRETATION_sRGB;
+          image.get_image()->Type = is8bit ? VIPS_INTERPRETATION_sRGB : VIPS_INTERPRETATION_RGB16;
+        }
+        if (descriptor->rawPageHeight > 0) {
+          image.set(VIPS_META_PAGE_HEIGHT, descriptor->rawPageHeight);
+          image.set(VIPS_META_N_PAGES, static_cast<int>(descriptor->rawHeight / descriptor->rawPageHeight));
+        }
+        if (descriptor->rawPremultiplied) {
+          image = image.unpremultiply();
         }
         imageType = ImageType::RAW;
       } else {
@@ -280,25 +471,7 @@ namespace sharp {
         imageType = DetermineImageType(descriptor->buffer, descriptor->bufferLength);
         if (imageType != ImageType::UNKNOWN) {
           try {
-            vips::VOption *option = VImage::option()
-              ->set("access", descriptor->access)
-              ->set("fail", descriptor->failOnError);
-            if (imageType == ImageType::SVG) {
-              option->set("unlimited", TRUE);
-            }
-            if (imageType == ImageType::SVG || imageType == ImageType::PDF) {
-              option->set("dpi", descriptor->density);
-            }
-            if (imageType == ImageType::MAGICK) {
-              option->set("density", std::to_string(descriptor->density).data());
-            }
-            if (ImageTypeSupportsPage(imageType)) {
-              option->set("n", descriptor->pages);
-              option->set("page", descriptor->page);
-            }
-            if (imageType == ImageType::OPENSLIDE) {
-              option->set("level", descriptor->level);
-            }
+            vips::VOption *option = GetOptionsForImageType(imageType, descriptor);
             image = VImage::new_from_buffer(descriptor->buffer, descriptor->bufferLength, nullptr, option);
             if (imageType == ImageType::SVG || imageType == ImageType::PDF || imageType == ImageType::MAGICK) {
               image = SetDensity(image, descriptor->density);
@@ -311,46 +484,81 @@ namespace sharp {
         }
       }
     } else {
-      if (descriptor->createChannels > 0) {
+      int const channels = descriptor->createChannels;
+      if (channels > 0) {
         // Create new image
-        std::vector<double> background = {
-          descriptor->createBackground[0],
-          descriptor->createBackground[1],
-          descriptor->createBackground[2]
-        };
-        if (descriptor->createChannels == 4) {
-          background.push_back(descriptor->createBackground[3]);
+        if (descriptor->createNoiseType == "gaussian") {
+          std::vector<VImage> bands = {};
+          bands.reserve(channels);
+          for (int _band = 0; _band < channels; _band++) {
+            bands.push_back(VImage::gaussnoise(descriptor->createWidth, descriptor->createHeight, VImage::option()
+              ->set("mean", descriptor->createNoiseMean)
+              ->set("sigma", descriptor->createNoiseSigma)));
+          }
+          image = VImage::bandjoin(bands).copy(VImage::option()->set("interpretation",
+            channels < 3 ? VIPS_INTERPRETATION_B_W: VIPS_INTERPRETATION_sRGB));
+        } else {
+          std::vector<double> background = {
+            descriptor->createBackground[0],
+            descriptor->createBackground[1],
+            descriptor->createBackground[2]
+          };
+          if (channels == 4) {
+            background.push_back(descriptor->createBackground[3]);
+          }
+          image = VImage::new_matrix(descriptor->createWidth, descriptor->createHeight)
+            .copy(VImage::option()->set("interpretation",
+              channels < 3 ? VIPS_INTERPRETATION_B_W : VIPS_INTERPRETATION_sRGB))
+            .new_from_image(background);
         }
-        image = VImage::new_matrix(descriptor->createWidth, descriptor->createHeight).new_from_image(background);
-        image.get_image()->Type = VIPS_INTERPRETATION_sRGB;
+        if (descriptor->createPageHeight > 0) {
+          image.set(VIPS_META_PAGE_HEIGHT, descriptor->createPageHeight);
+          image.set(VIPS_META_N_PAGES, static_cast<int>(descriptor->createHeight / descriptor->createPageHeight));
+        }
+        image = image.cast(VIPS_FORMAT_UCHAR);
+        imageType = ImageType::RAW;
+      } else if (descriptor->textValue.length() > 0) {
+        // Create a new image with text
+        vips::VOption *textOptions = VImage::option()
+          ->set("align", descriptor->textAlign)
+          ->set("justify", descriptor->textJustify)
+          ->set("rgba", descriptor->textRgba)
+          ->set("spacing", descriptor->textSpacing)
+          ->set("wrap", descriptor->textWrap)
+          ->set("autofit_dpi", &descriptor->textAutofitDpi);
+        if (descriptor->textWidth > 0) {
+          textOptions->set("width", descriptor->textWidth);
+        }
+        // Ignore dpi if height is set
+        if (descriptor->textWidth > 0 && descriptor->textHeight > 0) {
+          textOptions->set("height", descriptor->textHeight);
+        } else if (descriptor->textDpi > 0) {
+          textOptions->set("dpi", descriptor->textDpi);
+        }
+        if (descriptor->textFont.length() > 0) {
+          textOptions->set("font", const_cast<char*>(descriptor->textFont.data()));
+        }
+        if (descriptor->textFontfile.length() > 0) {
+          textOptions->set("fontfile", const_cast<char*>(descriptor->textFontfile.data()));
+        }
+        image = VImage::text(const_cast<char *>(descriptor->textValue.data()), textOptions);
+        if (!descriptor->textRgba) {
+          image = image.copy(VImage::option()->set("interpretation", VIPS_INTERPRETATION_B_W));
+        }
         imageType = ImageType::RAW;
       } else {
         // From filesystem
         imageType = DetermineImageType(descriptor->file.data());
         if (imageType == ImageType::MISSING) {
-          throw vips::VError("Input file is missing");
+          if (descriptor->file.find("<svg") != std::string::npos) {
+            throw vips::VError("Input file is missing, did you mean "
+              "sharp(Buffer.from('" + descriptor->file.substr(0, 8) + "...')?");
+          }
+          throw vips::VError("Input file is missing: " + descriptor->file);
         }
         if (imageType != ImageType::UNKNOWN) {
           try {
-            vips::VOption *option = VImage::option()
-              ->set("access", descriptor->access)
-              ->set("fail", descriptor->failOnError);
-            if (imageType == ImageType::SVG) {
-              option->set("unlimited", TRUE);
-            }
-            if (imageType == ImageType::SVG || imageType == ImageType::PDF) {
-              option->set("dpi", descriptor->density);
-            }
-            if (imageType == ImageType::MAGICK) {
-              option->set("density", std::to_string(descriptor->density).data());
-            }
-            if (ImageTypeSupportsPage(imageType)) {
-              option->set("n", descriptor->pages);
-              option->set("page", descriptor->page);
-            }
-            if (imageType == ImageType::OPENSLIDE) {
-              option->set("level", descriptor->level);
-            }
+            vips::VOption *option = GetOptionsForImageType(imageType, descriptor);
             image = VImage::new_from_file(descriptor->file.data(), option);
             if (imageType == ImageType::SVG || imageType == ImageType::PDF || imageType == ImageType::MAGICK) {
               image = SetDensity(image, descriptor->density);
@@ -363,9 +571,10 @@ namespace sharp {
         }
       }
     }
+
     // Limit input images to a given number of pixels, where pixels = width * height
     if (descriptor->limitInputPixels > 0 &&
-      static_cast<uint64_t>(image.width() * image.height()) > static_cast<uint64_t>(descriptor->limitInputPixels)) {
+      static_cast<uint64_t>(image.width()) * image.height() > descriptor->limitInputPixels) {
       throw vips::VError("Input image exceeds pixel limit");
     }
     return std::make_tuple(image, imageType);
@@ -375,20 +584,54 @@ namespace sharp {
     Does this image have an embedded profile?
   */
   bool HasProfile(VImage image) {
-    return (image.get_typeof(VIPS_META_ICC_NAME) != 0) ? TRUE : FALSE;
+    return image.get_typeof(VIPS_META_ICC_NAME) == VIPS_TYPE_BLOB;
   }
 
   /*
-    Does this image have an alpha channel?
-    Uses colour space interpretation with number of channels to guess this.
+    Get copy of embedded profile.
   */
-  bool HasAlpha(VImage image) {
-    int const bands = image.bands();
-    VipsInterpretation const interpretation = image.interpretation();
-    return (
-      (bands == 2 && interpretation == VIPS_INTERPRETATION_B_W) ||
-      (bands == 4 && interpretation != VIPS_INTERPRETATION_CMYK) ||
-      (bands == 5 && interpretation == VIPS_INTERPRETATION_CMYK));
+  std::pair<char*, size_t> GetProfile(VImage image) {
+    std::pair<char*, size_t> icc(nullptr, 0);
+    if (HasProfile(image)) {
+      size_t length;
+      const void *data = image.get_blob(VIPS_META_ICC_NAME, &length);
+      icc.first = static_cast<char*>(g_malloc(length));
+      icc.second = length;
+      memcpy(icc.first, data, length);
+    }
+    return icc;
+  }
+
+  /*
+    Set embedded profile.
+  */
+  VImage SetProfile(VImage image, std::pair<char*, size_t> icc) {
+    if (icc.first != nullptr) {
+      image = image.copy();
+      image.set(VIPS_META_ICC_NAME, reinterpret_cast<VipsCallbackFn>(vips_area_free_cb), icc.first, icc.second);
+    }
+    return image;
+  }
+
+  static void* RemoveExifCallback(VipsImage *image, char const *field, GValue *value, void *data) {
+    std::vector<std::string> *fieldNames = static_cast<std::vector<std::string> *>(data);
+    std::string fieldName(field);
+    if (fieldName.substr(0, 8) == ("exif-ifd")) {
+      fieldNames->push_back(fieldName);
+    }
+    return nullptr;
+  }
+
+  /*
+    Remove all EXIF-related image fields.
+  */
+  VImage RemoveExif(VImage image) {
+    std::vector<std::string> fieldNames;
+    vips_image_map(image.get_image(), static_cast<VipsImageMapFn>(RemoveExifCallback), &fieldNames);
+    for (const auto& f : fieldNames) {
+      image.remove(f.data());
+    }
+    return image;
   }
 
   /*
@@ -417,6 +660,52 @@ namespace sharp {
   VImage RemoveExifOrientation(VImage image) {
     VImage copy = image.copy();
     copy.remove(VIPS_META_ORIENTATION);
+    copy.remove("exif-ifd0-Orientation");
+    return copy;
+  }
+
+  /*
+    Set animation properties if necessary.
+  */
+  VImage SetAnimationProperties(VImage image, int nPages, int pageHeight, std::vector<int> delay, int loop) {
+    bool hasDelay = !delay.empty();
+    VImage copy = image.copy();
+
+    // Only set page-height if we have more than one page, or this could
+    // accidentally turn into an animated image later.
+    if (nPages > 1) copy.set(VIPS_META_PAGE_HEIGHT, pageHeight);
+    if (hasDelay) {
+      if (delay.size() == 1) {
+        // We have just one delay, repeat that value for all frames.
+        delay.insert(delay.end(), nPages - 1, delay[0]);
+      }
+      copy.set("delay", delay);
+    }
+    if (nPages == 1 && !hasDelay && loop == -1) {
+      loop = 1;
+    }
+    if (loop != -1) copy.set("loop", loop);
+
+    return copy;
+  }
+
+  /*
+    Remove animation properties from image.
+  */
+  VImage RemoveAnimationProperties(VImage image) {
+    VImage copy = image.copy();
+    copy.remove(VIPS_META_PAGE_HEIGHT);
+    copy.remove("delay");
+    copy.remove("loop");
+    return copy;
+  }
+
+  /*
+    Remove GIF palette from image.
+  */
+  VImage RemoveGifPalette(VImage image) {
+    VImage copy = image.copy();
+    copy.remove("gif-palette");
     return copy;
   }
 
@@ -440,23 +729,41 @@ namespace sharp {
   VImage SetDensity(VImage image, const double density) {
     const double pixelsPerMm = density / 25.4;
     VImage copy = image.copy();
-    copy.set("Xres", pixelsPerMm);
-    copy.set("Yres", pixelsPerMm);
-    copy.set(VIPS_META_RESOLUTION_UNIT, "in");
+    copy.get_image()->Xres = pixelsPerMm;
+    copy.get_image()->Yres = pixelsPerMm;
     return copy;
+  }
+
+  /*
+    Multi-page images can have a page height. Fetch it, and sanity check it.
+    If page-height is not set, it defaults to the image height
+  */
+  int GetPageHeight(VImage image) {
+    return vips_image_get_page_height(image.get_image());
   }
 
   /*
     Check the proposed format supports the current dimensions.
   */
   void AssertImageTypeDimensions(VImage image, ImageType const imageType) {
+    const int height = image.get_typeof(VIPS_META_PAGE_HEIGHT) == G_TYPE_INT
+      ? image.get_int(VIPS_META_PAGE_HEIGHT)
+      : image.height();
     if (imageType == ImageType::JPEG) {
-      if (image.width() > 65535 || image.height() > 65535) {
+      if (image.width() > 65535 || height > 65535) {
         throw vips::VError("Processed image is too large for the JPEG format");
       }
     } else if (imageType == ImageType::WEBP) {
-      if (image.width() > 16383 || image.height() > 16383) {
+      if (image.width() > 16383 || height > 16383) {
         throw vips::VError("Processed image is too large for the WebP format");
+      }
+    } else if (imageType == ImageType::GIF) {
+      if (image.width() > 65535 || height > 65535) {
+        throw vips::VError("Processed image is too large for the GIF format");
+      }
+    } else if (imageType == ImageType::HEIF) {
+      if (image.width() > 16384 || height > 16384) {
+        throw vips::VError("Processed image is too large for the HEIF format");
       }
     }
   }
@@ -493,6 +800,32 @@ namespace sharp {
       vipsWarnings.pop();
     }
     return warning;
+  }
+
+  /*
+    Attach an event listener for progress updates, used to detect timeout
+  */
+  void SetTimeout(VImage image, int const seconds) {
+    if (seconds > 0) {
+      VipsImage *im = image.get_image();
+      if (im->progress_signal == NULL) {
+        int *timeout = VIPS_NEW(im, int);
+        *timeout = seconds;
+        g_signal_connect(im, "eval", G_CALLBACK(VipsProgressCallBack), timeout);
+        vips_image_set_progress(im, true);
+      }
+    }
+  }
+
+  /*
+    Event listener for progress updates, used to detect timeout
+  */
+  void VipsProgressCallBack(VipsImage *im, VipsProgress *progress, int *timeout) {
+    if (*timeout > 0 && progress->run >= *timeout) {
+      vips_image_set_kill(im, true);
+      vips_error("timeout", "%d%% complete", progress->percent);
+      *timeout = 0;
+    }
   }
 
   /*
@@ -614,24 +947,16 @@ namespace sharp {
     int top = 0;
 
     // assign only if valid
-    if (x >= 0 && x < (inWidth - outWidth)) {
+    if (x < (inWidth - outWidth)) {
       left = x;
     } else if (x >= (inWidth - outWidth)) {
       left = inWidth - outWidth;
     }
 
-    if (y >= 0 && y < (inHeight - outHeight)) {
+    if (y < (inHeight - outHeight)) {
       top = y;
     } else if (y >= (inHeight - outHeight)) {
       top = inHeight - outHeight;
-    }
-
-    // the resulting left and top could have been outside the image after calculation from bottom/right edges
-    if (left < 0) {
-      left = 0;
-    }
-    if (top < 0) {
-      top = 0;
     }
 
     return std::make_tuple(left, top);
@@ -645,49 +970,29 @@ namespace sharp {
   }
 
   /*
-    Return the image alpha maximum. Useful for combining alpha bands. scRGB
-    images are 0 - 1 for image data, but the alpha is 0 - 255.
-  */
-  double MaximumImageAlpha(VipsInterpretation const interpretation) {
-    return Is16Bit(interpretation) ? 65535.0 : 255.0;
-  }
-
-  /*
-    Get boolean operation type from string
-  */
-  VipsOperationBoolean GetBooleanOperation(std::string const opStr) {
-    return static_cast<VipsOperationBoolean>(
-      vips_enum_from_nick(nullptr, VIPS_TYPE_OPERATION_BOOLEAN, opStr.data()));
-  }
-
-  /*
-    Get interpretation type from string
-  */
-  VipsInterpretation GetInterpretation(std::string const typeStr) {
-    return static_cast<VipsInterpretation>(
-      vips_enum_from_nick(nullptr, VIPS_TYPE_INTERPRETATION, typeStr.data()));
-  }
-
-  /*
     Convert RGBA value to another colourspace
   */
-  std::vector<double> GetRgbaAsColourspace(std::vector<double> const rgba, VipsInterpretation const interpretation) {
+  std::vector<double> GetRgbaAsColourspace(std::vector<double> const rgba,
+    VipsInterpretation const interpretation, bool premultiply) {
     int const bands = static_cast<int>(rgba.size());
-    if (bands < 3 || interpretation == VIPS_INTERPRETATION_sRGB || interpretation == VIPS_INTERPRETATION_RGB) {
+    if (bands < 3) {
       return rgba;
-    } else {
-      VImage pixel = VImage::new_matrix(1, 1);
-      pixel.set("bands", bands);
-      pixel = pixel.new_from_image(rgba);
-      pixel = pixel.colourspace(interpretation, VImage::option()->set("source_space", VIPS_INTERPRETATION_sRGB));
-      return pixel(0, 0);
     }
+    VImage pixel = VImage::new_matrix(1, 1);
+    pixel.set("bands", bands);
+    pixel = pixel
+      .new_from_image(rgba)
+      .colourspace(interpretation, VImage::option()->set("source_space", VIPS_INTERPRETATION_sRGB));
+    if (premultiply) {
+      pixel = pixel.premultiply();
+    }
+    return pixel(0, 0);
   }
 
   /*
     Apply the alpha channel to a given colour
   */
-  std::tuple<VImage, std::vector<double>> ApplyAlpha(VImage image, std::vector<double> colour) {
+  std::tuple<VImage, std::vector<double>> ApplyAlpha(VImage image, std::vector<double> colour, bool premultiply) {
     // Scale up 8-bit values to match 16-bit input image
     double const multiplier = sharp::Is16Bit(image.interpretation()) ? 256.0 : 1.0;
     // Create alphaColour colour
@@ -706,18 +1011,115 @@ namespace sharp {
         0.0722 * colour[2])
       };
     }
-    // Add alpha channel to alphaColour colour
-    if (colour[3] < 255.0 || HasAlpha(image)) {
-      alphaColour.push_back(colour[3] * multiplier);
+    // Add alpha channel(s) to alphaColour colour
+    if (colour[3] < 255.0 || image.has_alpha()) {
+      int extraBands = image.bands() > 4 ? image.bands() - 3 : 1;
+      alphaColour.insert(alphaColour.end(), extraBands, colour[3] * multiplier);
     }
     // Ensure alphaColour colour uses correct colourspace
-    alphaColour = sharp::GetRgbaAsColourspace(alphaColour, image.interpretation());
+    alphaColour = sharp::GetRgbaAsColourspace(alphaColour, image.interpretation(), premultiply);
     // Add non-transparent alpha channel, if required
-    if (colour[3] < 255.0 && !HasAlpha(image)) {
-      image = image.bandjoin(
-        VImage::new_matrix(image.width(), image.height()).new_from_image(255 * multiplier));
+    if (colour[3] < 255.0 && !image.has_alpha()) {
+      image = image.bandjoin_const({ 255 * multiplier });
     }
     return std::make_tuple(image, alphaColour);
   }
 
+  /*
+    Removes alpha channels, if any.
+  */
+  VImage RemoveAlpha(VImage image) {
+    while (image.bands() > 1 && image.has_alpha()) {
+      image = image.extract_band(0, VImage::option()->set("n", image.bands() - 1));
+    }
+    return image;
+  }
+
+  /*
+    Ensures alpha channel, if missing.
+  */
+  VImage EnsureAlpha(VImage image, double const value) {
+    if (!image.has_alpha()) {
+      image = image.bandjoin_const({ value * vips_interpretation_max_alpha(image.interpretation()) });
+    }
+    return image;
+  }
+
+  std::pair<double, double> ResolveShrink(int width, int height, int targetWidth, int targetHeight,
+    Canvas canvas, bool withoutEnlargement, bool withoutReduction) {
+    double hshrink = 1.0;
+    double vshrink = 1.0;
+
+    if (targetWidth > 0 && targetHeight > 0) {
+      // Fixed width and height
+      hshrink = static_cast<double>(width) / targetWidth;
+      vshrink = static_cast<double>(height) / targetHeight;
+
+      switch (canvas) {
+        case Canvas::CROP:
+        case Canvas::MIN:
+          if (hshrink < vshrink) {
+            vshrink = hshrink;
+          } else {
+            hshrink = vshrink;
+          }
+          break;
+        case Canvas::EMBED:
+        case Canvas::MAX:
+          if (hshrink > vshrink) {
+            vshrink = hshrink;
+          } else {
+            hshrink = vshrink;
+          }
+          break;
+        case Canvas::IGNORE_ASPECT:
+          break;
+      }
+    } else if (targetWidth > 0) {
+      // Fixed width
+      hshrink = static_cast<double>(width) / targetWidth;
+
+      if (canvas != Canvas::IGNORE_ASPECT) {
+        // Auto height
+        vshrink = hshrink;
+      }
+    } else if (targetHeight > 0) {
+      // Fixed height
+      vshrink = static_cast<double>(height) / targetHeight;
+
+      if (canvas != Canvas::IGNORE_ASPECT) {
+        // Auto width
+        hshrink = vshrink;
+      }
+    }
+
+    // We should not reduce or enlarge the output image, if
+    // withoutReduction or withoutEnlargement is specified.
+    if (withoutReduction) {
+      // Equivalent of VIPS_SIZE_UP
+      hshrink = std::min(1.0, hshrink);
+      vshrink = std::min(1.0, vshrink);
+    } else if (withoutEnlargement) {
+      // Equivalent of VIPS_SIZE_DOWN
+      hshrink = std::max(1.0, hshrink);
+      vshrink = std::max(1.0, vshrink);
+    }
+
+    // We don't want to shrink so much that we send an axis to 0
+    hshrink = std::min(hshrink, static_cast<double>(width));
+    vshrink = std::min(vshrink, static_cast<double>(height));
+
+    return std::make_pair(hshrink, vshrink);
+  }
+
+  /*
+    Ensure decoding remains sequential.
+  */
+  VImage StaySequential(VImage image, bool condition) {
+    if (vips_image_is_sequential(image.get_image()) && condition) {
+      image = image.copy_memory().copy();
+      image.remove(VIPS_META_SEQUENTIAL);
+    }
+    return image;
+  }
 }  // namespace sharp

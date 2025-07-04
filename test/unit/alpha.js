@@ -1,3 +1,6 @@
+// Copyright 2013 Lovell Fuller and others.
+// SPDX-License-Identifier: Apache-2.0
+
 'use strict';
 
 const assert = require('assert');
@@ -23,6 +26,7 @@ describe('Alpha transparency', function () {
       .flatten({
         background: { r: 255, g: 102, b: 0 }
       })
+      .jpeg({ chromaSubsampling: '4:4:4' })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(400, info.width);
@@ -35,6 +39,7 @@ describe('Alpha transparency', function () {
     sharp(fixtures.inputPngWithTransparency)
       .resize(400, 300)
       .flatten({ background: '#ff6600' })
+      .jpeg({ chromaSubsampling: '4:4:4' })
       .toBuffer(function (err, data, info) {
         if (err) throw err;
         assert.strictEqual(400, info.width);
@@ -154,5 +159,28 @@ describe('Alpha transparency', function () {
           assert.strictEqual(4, result.info.channels);
         });
     }));
+  });
+
+  it('Valid ensureAlpha value used for alpha channel', async () => {
+    const background = { r: 255, g: 0, b: 0 };
+    const [r, g, b, alpha] = await sharp({
+      create: {
+        width: 8,
+        height: 8,
+        channels: 3,
+        background
+      }
+    })
+      .ensureAlpha(0.5)
+      .raw()
+      .toBuffer();
+
+    assert.deepStrictEqual({ r, g, b, alpha }, { ...background, alpha: 127 });
+  });
+
+  it('Invalid ensureAlpha value throws', async () => {
+    assert.throws(() => {
+      sharp().ensureAlpha('fail');
+    });
   });
 });
